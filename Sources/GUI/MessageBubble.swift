@@ -11,7 +11,6 @@ struct MessageBubble: View {
     let onSelect: () -> Void
 
     @State private var inspectHovered = false
-    @State private var copyHovered = false
 
     var body: some View {
         VStack(alignment: message.role == "user" ? .trailing : .leading, spacing: 4) {
@@ -94,23 +93,7 @@ struct MessageBubble: View {
                 }
 
                 // Copy button
-                Button(action: copyToClipboard) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "doc.on.doc")
-                        Text("Copy")
-                    }
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(copyHovered ? Color(nsColor: .controlBackgroundColor) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .foregroundColor(.secondary)
-                }
-                .buttonStyle(.borderless)
-                .onHover { hovering in
-                    copyHovered = hovering
-                    if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-                }
+                CopyButton(text: message.content)
 
                 if message.role == "assistant" { Spacer() }
             }
@@ -127,8 +110,4 @@ struct MessageBubble: View {
         }
     }
 
-    private func copyToClipboard() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(message.content, forType: .string)
-    }
 }

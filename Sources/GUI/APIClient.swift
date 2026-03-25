@@ -116,14 +116,16 @@ final class APIClient: Sendable {
 
                     let (bytes, _) = try await URLSession.shared.bytes(for: urlRequest)
                     for try await line in bytes.lines {
-                        if !line.isEmpty {
-                            rawLines.append(line)
-                        }
                         if line.hasPrefix("data: [DONE]") {
+                            rawLines.append("data: [DONE]")
                             break
                         }
                         if line.hasPrefix("data: ") {
                             let json = String(line.dropFirst(6))
+                            // Pretty-print each SSE chunk for the debug panel
+                            let prettyChunk = Self.prettyFormatInline(json)
+                            rawLines.append("data: \(prettyChunk)")
+
                             if let data = json.data(using: .utf8),
                                let chunk = try? JSONDecoder().decode(StreamChunk.self, from: data),
                                let content = chunk.choices.first?.delta.content {
@@ -131,7 +133,7 @@ final class APIClient: Sendable {
                             }
                         }
                     }
-                    APIClient.lastRawSSEResponse = rawLines.joined(separator: "\n")
+                    APIClient.lastRawSSEResponse = rawLines.joined(separator: "\n\n")
                     continuation.finish()
                 } catch {
                     APIClient.lastRawSSEResponse = rawLines.joined(separator: "\n") + "\nerror: \(error.localizedDescription)"
@@ -220,6 +222,15 @@ final class APIClient: Sendable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(value),
               let str = String(data: data, encoding: .utf8) else { return "{}" }
+        return str
+    }
+
+    /// Pretty-print a single JSON string (static, for use in closures).
+    static func prettyFormatInline(_ raw: String) -> String {
+        guard let data = raw.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data),
+              let pretty = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+              let str = String(data: pretty, encoding: .utf8) else { return raw }
         return str
     }
 

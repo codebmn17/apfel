@@ -141,15 +141,7 @@ struct DebugPanel: View {
                 Text(title)
                     .fontWeight(.medium)
                 Spacer()
-                Button(action: {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(text, forType: .string)
-                }) {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .onHover { h in if h { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
+                CopyButton(text: text)
             }
             .font(.caption)
 
@@ -164,6 +156,42 @@ struct DebugPanel: View {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(color.opacity(0.15), lineWidth: 1)
                 )
+        }
+    }
+}
+
+// MARK: - Copy Button with Hover + Click Feedback
+
+struct CopyButton: View {
+    let text: String
+    @State private var isHovered = false
+    @State private var justCopied = false
+
+    var body: some View {
+        Button(action: {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            justCopied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                justCopied = false
+            }
+        }) {
+            Label(justCopied ? "Copied!" : "Copy", systemImage: justCopied ? "checkmark.circle.fill" : "doc.on.doc")
+                .font(.caption)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    isHovered
+                        ? Color(nsColor: .controlBackgroundColor)
+                        : Color.clear
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .buttonStyle(.borderless)
+        .foregroundColor(justCopied ? .green : .secondary)
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
     }
 }
