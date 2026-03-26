@@ -222,6 +222,15 @@ while i < args.count {
     i += 1
 }
 
+// If no prompt was given but stdin is piped, read stdin as the prompt
+if prompt.isEmpty && mode == "single" && isatty(STDIN_FILENO) == 0 {
+    var lines: [String] = []
+    while let line = readLine(strippingNewline: false) {
+        lines.append(line)
+    }
+    prompt = lines.joined().trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
 // MARK: - Dispatch
 
 let sessionOpts = SessionOptions(
