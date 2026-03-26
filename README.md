@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![100% On-Device](https://img.shields.io/badge/inference-100%25%20on--device-green)](https://developer.apple.com/documentation/foundationmodels)
 
-Apple Intelligence as a UNIX tool and OpenAI-compatible API server.
+Use the **FREE** local Apple Intelligence LLM on your Mac - your model, your machine, your way.
 
-No API keys. No cloud. No model downloads. Runs entirely on your Mac.
+No API keys. No cloud. No subscriptions. No rate limits. The AI is already on your computer - apfel lets you use it.
 
 ## What is this
 
