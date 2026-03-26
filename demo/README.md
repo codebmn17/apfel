@@ -31,14 +31,14 @@ $ awk '{print $1}' access.log | sort | uniq -c | sort -rn
 ./oneliner -x "sort processes by memory"                # execute (asks confirmation)
 ```
 
-## wtf
+## wtd
 
-What is this directory? Instant orientation in any project.
+What's this directory? Instant orientation in any project.
 
 ```bash
-./wtf                    # current directory
-./wtf ~/some/project     # any directory
-./wtf -c .               # copy summary to clipboard
+./wtd                    # current directory
+./wtd ~/some/project     # any directory
+./wtd -c .               # copy summary to clipboard
 ```
 
 Checks file listing, README, package.json/Package.swift/Cargo.toml/go.mod, git branch and last commit, then tells you what this project is, what language, and how to run it.

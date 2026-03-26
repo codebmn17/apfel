@@ -132,7 +132,7 @@ demo/mac-narrator --watch      # continuous narration every 60s
 ```
 
 Also in `demo/`:
-- **[wtf](./demo/wtf)** — "what is this directory?" — instant project orientation
+- **[wtd](./demo/wtd)** — "what's this directory?" — instant project orientation
 - **[explain](./demo/explain)** — explain a command, error, or code snippet
 - **[naming](./demo/naming)** — naming suggestions for functions, variables, files
 - **[port](./demo/port)** — what's using this port?
