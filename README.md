@@ -1,8 +1,9 @@
 # apfel
 
-[![Version 0.6.2](https://img.shields.io/badge/version-0.6.2-blue)](https://github.com/Arthur-Ficial/apfel)
+[![Version 0.6.3](https://img.shields.io/badge/version-0.6.3-blue)](https://github.com/Arthur-Ficial/apfel)
 [![Swift 6.3](https://img.shields.io/badge/Swift-6.3-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![macOS 26+](https://img.shields.io/badge/macOS-26%2B-000000?logo=apple&logoColor=white)](https://developer.apple.com/macos/)
+[![No Xcode Required](https://img.shields.io/badge/Xcode-not%20required-orange)](https://developer.apple.com/xcode/resources/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![100% On-Device](https://img.shields.io/badge/inference-100%25%20on--device-green)](https://developer.apple.com/documentation/foundationmodels)
 
@@ -24,15 +25,49 @@ Every Mac with Apple Silicon has a **built-in LLM** - Apple's on-device foundati
 
 ![apfel GUI Debug Inspector](screenshots/gui-chat.png)
 
+## Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Mac** | Apple Silicon (M1 or later) |
+| **macOS** | macOS 26 (Tahoe) or later |
+| **Apple Intelligence** | Must be [enabled in System Settings](https://support.apple.com/en-us/108380) |
+| **Swift** | Swift 6.3+ (comes with Command Line Tools) |
+| **Xcode** | **NOT required** - Command Line Tools only |
+
+Check if you're ready:
+
+```bash
+# Check macOS version (needs 26+)
+sw_vers
+
+# Check Swift is installed
+swift --version
+
+# If Swift is missing, install Command Line Tools:
+xcode-select --install
+```
+
 ## Install
 
 ```bash
 git clone https://github.com/Arthur-Ficial/apfel.git
 cd apfel
-make install    # builds release, installs to /usr/local/bin
+make install
 ```
 
-Requires macOS 26+, Apple Silicon, and [Apple Intelligence enabled](https://support.apple.com/en-us/108380).
+That's it. `make install` does everything:
+1. Auto-bumps the version number
+2. Builds a release binary
+3. Installs to `/usr/local/bin/apfel`
+
+Verify it works:
+
+```bash
+apfel "Hello, world!"
+apfel --version
+apfel --release       # full build info
+```
 
 ## Quick Start
 
@@ -261,18 +296,33 @@ Built with Swift 6.3 strict concurrency. Single `Package.swift`, three targets:
 - `apfel` - executable (CLI + server + GUI)
 - `apfel-tests` - 48 unit tests
 
-No Xcode required - builds with Command Line Tools only.
+**No Xcode required.** Builds and tests with Command Line Tools only.
 
 ## Build & Test
 
 ```bash
-make install                             # release build + install to /usr/local/bin
-swift build                              # debug build
-swift run apfel-tests                    # 48 pure Swift unit tests
-python3 -m pytest Tests/integration/ -v  # 51 integration tests (requires server running)
+# Build + install (auto-bumps patch version each time)
+make install                             # build release + install to /usr/local/bin
+make build                               # build release only (no install)
+
+# Version management (zero manual editing)
+make version                             # print current version
+make release-minor                       # bump minor: 0.6.x -> 0.7.0
+make release-major                       # bump major: 0.x.y -> 1.0.0
+
+# Debug build (no version bump, uses swift directly)
+swift build                              # quick debug build
+
+# Tests
+swift run apfel-tests                    # 48 pure Swift unit tests (no XCTest needed)
+apfel --serve &                          # start server for integration tests
+python3 -m pytest Tests/integration/ -v  # 51 integration tests
 ```
 
-`make install` auto-generates build metadata (commit, date, Swift version) embedded in the binary. View with `apfel --release`.
+Every `make build`/`make install` automatically:
+- Bumps the patch version (`.version` file is the single source of truth)
+- Updates the README version badge
+- Generates build metadata (commit, date, Swift version) viewable via `apfel --release`
 
 ## Examples
 
