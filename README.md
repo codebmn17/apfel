@@ -1,7 +1,7 @@
 # apfel
 
 [![Version 0.6.6](https://img.shields.io/badge/version-0.6.6-blue)](https://github.com/Arthur-Ficial/apfel)
-[![Swift 6.2+](https://img.shields.io/badge/Swift-6.2%2B-F05138?logo=swift&logoColor=white)](https://swift.org)
+[![Swift 6.3+](https://img.shields.io/badge/Swift-6.3%2B-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![macOS 26.4+](https://img.shields.io/badge/macOS-26.4%2B-000000?logo=apple&logoColor=white)](https://developer.apple.com/macos/)
 [![No Xcode Required](https://img.shields.io/badge/Xcode-not%20required-orange)](https://developer.apple.com/xcode/resources/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -31,7 +31,7 @@ Every Mac with Apple Silicon has a **built-in LLM** - Apple's on-device foundati
 - macOS 26.4 Tahoe or newer (released March 24, 2026)
 - [Apple Intelligence enabled](https://support.apple.com/en-us/121115)
 - **Homebrew install:** nothing else needed
-- **Build from source:** Swift 6.2+ / Command Line Tools with macOS 26.4 SDK (no Xcode required). macOS 26.4 ships with Swift 6.3 (released March 24, 2026).
+- **Build from source:** Swift 6.3+ / Command Line Tools with macOS 26.4 SDK (no Xcode required)
 
 ## Install
 
