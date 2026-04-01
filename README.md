@@ -167,6 +167,24 @@ Also in `demo/`:
 - **[port](./demo/port)** - what's using this port?
 - **[gitsum](./demo/gitsum)** - summarize recent git activity
 
+### Debug GUI
+
+**[apfel-gui](https://github.com/Arthur-Ficial/apfel-gui)** — native macOS SwiftUI app for chatting with Apple Intelligence and inspecting every request/response.
+
+![apfel GUI](screenshots/gui-chat.png)
+
+```bash
+# Install (requires apfel):
+brew install Arthur-Ficial/tap/apfel    # if you don't have apfel yet
+git clone https://github.com/Arthur-Ficial/apfel-gui.git
+cd apfel-gui && make install
+
+# Run:
+apfel-gui
+```
+
+Chat, debug inspector, request logs, context settings, speech-to-text, text-to-speech — all on-device. See the [apfel-gui repo](https://github.com/Arthur-Ficial/apfel-gui) for details.
+
 ## OpenAI API Compatibility
 
 **Base URL:** `http://localhost:11434/v1`
