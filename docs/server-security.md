@@ -1,6 +1,6 @@
 # Server Security
 
-apfel's HTTP server (`--serve`) runs on localhost by default and is designed for local development and on-device inference. This document explains the security settings, their reasoning, and how to configure them.
+apfel's HTTP server (`--serve`) runs on localhost by default and is designed for local development and on-device inference. This document explains the security settings, their reasoning, and how to configure them for your specific use case.
 
 ## Why origin checking?
 
@@ -9,8 +9,29 @@ Any website you visit can make HTTP requests to `localhost` via JavaScript. This
 - **Ollama** - same port (11434), CSRF via `fetch()`, no auth. [Writeup](https://blog.jaisal.dev/articles/oh-llama)
 - **Jupyter** - added token auth after CSRF CVEs. [Security release](https://blog.jupyter.org/security-release-jupyter-notebook-4-3-1-808e1f3bb5e2)
 - **175,000+ exposed Ollama instances** found by Shodan. [Cisco](https://blogs.cisco.com/security/detecting-exposed-llm-servers-shodan-case-study-on-ollama)
+- **0.0.0.0 Day** - browsers block `0.0.0.0` -> localhost, but Origin-based CSRF still works on `127.0.0.1`. [Oligo disclosure](https://www.oligo.security/blog/0-0-0-0-day-exploiting-localhost-apis-from-the-browser)
 
 Without protection, a malicious website could silently use your Apple Intelligence model for compute abuse or exfiltrate responses.
+
+---
+
+## How it works
+
+The `Origin` HTTP header is the key. Browsers automatically attach it to cross-origin requests. Non-browser tools (curl, Python SDK, shell scripts) don't.
+
+```
+Browser on evil.com -> fetch("http://localhost:11434/v1/chat/completions")
+                       ^^ Browser adds: Origin: http://evil.com
+                       ^^ apfel sees foreign origin -> 403 Forbidden
+
+curl http://localhost:11434/v1/chat/completions
+     ^^ No Origin header sent
+     ^^ apfel sees no Origin -> allowed (backward compatible)
+```
+
+This single check protects against browser-based attacks while keeping all non-browser workflows unchanged.
+
+---
 
 ## Default behavior
 
@@ -18,192 +39,486 @@ Without protection, a malicious website could silently use your Apple Intelligen
 apfel --serve
 ```
 
-By default, apfel checks the `Origin` header on incoming requests:
-
-- **No `Origin` header** - allowed. curl, Python SDKs, scripts, and other non-browser clients don't send this header. Everything works exactly as before.
-- **Localhost `Origin`** - allowed. `http://127.0.0.1`, `http://localhost`, `http://[::1]` (with any port) are all permitted.
-- **Foreign `Origin`** - rejected with HTTP 403. A website at `http://evil.com` cannot access your server.
-
-This check is invisible to normal usage. If you use curl, the OpenAI Python SDK, or any command-line tool, nothing changes.
-
-## Security flags
-
-### `--allowed-origins <origins>`
-
-Comma-separated list of allowed origins beyond the localhost defaults.
-
-```bash
-# Allow a local dev server
-apfel --serve --allowed-origins "http://localhost:3000"
-
-# Allow multiple origins
-apfel --serve --allowed-origins "http://localhost:3000,http://localhost:5173"
-
-# Allow a specific domain (for non-localhost setups)
-apfel --serve --allowed-origins "http://myapp.local:8080"
+```
+apfel server v0.6.23
+├ endpoint: http://127.0.0.1:11434
+├ cors:     disabled
+├ origin:   localhost only (http://127.0.0.1, http://localhost, http://[::1])
+├ token:    none
+└ ready
 ```
 
-**Default:** `http://127.0.0.1,http://localhost,http://[::1]`
-
-**How matching works:**
-- Exact match: `http://localhost` matches `http://localhost`
-- Port variants: `http://localhost` in the list also matches `http://localhost:3000`, `http://localhost:5173`, etc.
-- HTTPS variants: `http://localhost` in the list also matches `https://localhost`
-- Subdomain protection: `http://localhost` does NOT match `http://localhost.evil.com`
-
-### `--no-origin-check`
-
-Disable origin checking entirely. All origins are allowed.
+**What works:**
 
 ```bash
-apfel --serve --no-origin-check
-```
+# curl - no Origin header, always works
+curl http://localhost:11434/v1/models
+# => 200 OK
 
-**When to use:** Trusted networks, development environments where you need any origin to connect.
-
-**Equivalent to:** `--allowed-origins "*"`
-
-### `--token <secret>`
-
-Require Bearer token authentication on all endpoints except `/health`.
-
-```bash
-apfel --serve --token "my-secret-token"
-```
-
-Clients must include the token in every request:
-
-```bash
-curl -H "Authorization: Bearer my-secret-token" http://localhost:11434/v1/models
-```
-
-```python
+# Python SDK - no Origin header, always works
+python3 -c "
 from openai import OpenAI
-client = OpenAI(base_url="http://localhost:11434/v1", api_key="my-secret-token")
+c = OpenAI(base_url='http://localhost:11434/v1', api_key='ignored')
+print(c.models.list().data[0].id)
+"
+# => apple-foundationmodel
+
+# Browser JavaScript from localhost - allowed
+# fetch("http://localhost:11434/v1/models") from http://localhost:3000
+# => 200 OK, Access-Control-Allow-Origin: http://localhost:3000
 ```
 
-**Note:** `/health` is exempt from token auth so monitoring tools continue to work.
-
-### `--token-auto`
-
-Generate a random token and print it on startup. Same as `--token` but you don't have to invent a secret.
+**What's blocked:**
 
 ```bash
-apfel --serve --token-auto
-# Prints: token: 8A3F2B1C-...
+# Browser JavaScript from a foreign site
+curl -H "Origin: http://evil.com" http://localhost:11434/v1/models
+# => 403 Forbidden
+# => {"error":{"message":"Origin 'http://evil.com' is not allowed.","type":"forbidden"}}
+
+# Subdomain attacks (http://localhost.evil.com != http://localhost)
+curl -H "Origin: http://localhost.evil.com" http://localhost:11434/v1/models
+# => 403 Forbidden
 ```
 
-Explicit secrets passed with `--token` or `APFEL_TOKEN` are not echoed back to the terminal.
+**What this means:** Out of the box, your server is protected from cross-site attacks. curl, SDKs, and scripts work unchanged. Local browser apps can send requests and read simple GET responses. For full browser support (POST, custom headers), add `--cors`.
 
-### `APFEL_TOKEN` environment variable
+---
 
-Set the token via environment variable instead of a flag.
+## Security flags reference
 
-```bash
-export APFEL_TOKEN="my-secret-token"
-apfel --serve
-```
+### `--cors` - Enable CORS for browser clients
 
-The `--token` flag overrides the environment variable.
-
-### `--cors`
-
-Enable CORS (Cross-Origin Resource Sharing) headers for browser clients.
+Enables full CORS support: the server responds to OPTIONS preflight requests with the necessary `Access-Control-Allow-*` headers so browsers can make POST requests and send custom headers (like `Authorization`).
 
 ```bash
 apfel --serve --cors
 ```
 
-Without `--cors`, browser JavaScript cannot read responses from the server (even if origin check passes). With `--cors`, the server adds `Access-Control-Allow-Origin` to responses.
+```
+├ cors:     enabled
+├ origin:   localhost only (http://127.0.0.1, http://localhost, http://[::1])
+```
 
-**CORS + origin check interaction:**
-- `--cors` alone: CORS headers reflect the actual allowed origin (not wildcard `*`), so only localhost origins can read responses.
-- `--cors --allowed-origins "http://localhost:3000"`: Only that specific origin gets CORS access.
-- `--cors --no-origin-check`: Wildcard `*` - any origin can read responses.
-
-### `--footgun`
-
-The nuclear option. Disables all protections: no origin check + CORS enabled.
+**What changes:**
 
 ```bash
-apfel --serve --footgun
+# OPTIONS preflight now returns full CORS headers
+curl -X OPTIONS -D - http://localhost:11434/v1/chat/completions -o /dev/null
+# => 204 No Content
+# => Access-Control-Allow-Origin: http://localhost:3000  (if Origin sent)
+# => Access-Control-Allow-Methods: GET, POST, OPTIONS
+# => Access-Control-Allow-Headers: Content-Type, Authorization
+# => Access-Control-Max-Age: 86400
+
+# Browser POST requests now work from localhost
+# fetch("http://localhost:11434/v1/chat/completions", {
+#   method: "POST",
+#   headers: {"Content-Type": "application/json"},
+#   body: JSON.stringify({model: "apple-foundationmodel", messages: [...]})
+# })
+# => Works from http://localhost:* origins
 ```
 
-**Equivalent to:** `--no-origin-check --cors`
-
-This is the old behavior before CSRF protection was added. The server prints a prominent warning:
-
-```
-WARNING: --footgun mode - no origin check + CORS enabled
-Any website can access this server and read responses!
-```
-
-**When to use:** Testing, demos, environments where you explicitly want zero restrictions.
-
-## Common scenarios
-
-### Local web app development
-
-Your React/Vite/Next.js app runs on `localhost:3000` and needs to call apfel:
+**What stays the same:**
 
 ```bash
-apfel --serve --cors --allowed-origins "http://localhost:3000"
+# Foreign origins still blocked
+curl -H "Origin: http://evil.com" http://localhost:11434/v1/models
+# => 403 Forbidden (--cors does NOT disable origin checking)
 ```
 
-### Shared machine / multi-user
+**Key insight:** `--cors` enables browser communication, but does NOT weaken the origin check. Foreign sites are still blocked.
 
-Multiple users or processes need access, and you want basic auth:
+**When to use:** Your local web app needs to make `fetch()` calls to apfel. Without `--cors`, browsers block POST requests and requests with custom headers like `Authorization`.
+
+---
+
+### `--allowed-origins <origins>` - Add custom allowed origins
+
+Add specific origins to the default localhost allowlist. This is **additive** - localhost origins are always included.
+
+```bash
+apfel --serve --cors --allowed-origins "http://myapp.local:8080"
+```
+
+```
+├ cors:     enabled
+├ origin:   localhost only (http://127.0.0.1, http://localhost, http://[::1], http://myapp.local:8080)
+```
+
+**What changes:**
+
+```bash
+# Custom origin now allowed
+curl -H "Origin: http://myapp.local:8080" http://localhost:11434/v1/models
+# => 200 OK
+# => Access-Control-Allow-Origin: http://myapp.local:8080
+# => Vary: Origin
+
+# Default localhost origins still work
+curl -H "Origin: http://localhost:3000" http://localhost:11434/v1/models
+# => 200 OK
+
+# Other origins still blocked
+curl -H "Origin: http://evil.com" http://localhost:11434/v1/models
+# => 403 Forbidden
+
+# No Origin header still works (curl, SDKs)
+curl http://localhost:11434/v1/models
+# => 200 OK
+```
+
+**Multiple origins:**
+
+```bash
+apfel --serve --cors --allowed-origins "http://localhost:3000,http://localhost:5173"
+```
+
+**How matching works:**
+
+| Origin in request | Pattern in list | Match? | Why |
+|---|---|---|---|
+| `http://localhost` | `http://localhost` | Yes | Exact match |
+| `http://localhost:3000` | `http://localhost` | Yes | Port variant (default list matches all localhost ports) |
+| `http://localhost:5173` | `http://localhost` | Yes | Port variant |
+| `https://localhost` | `http://localhost` | Yes | HTTPS variant |
+| `http://localhost.evil.com` | `http://localhost` | **No** | Subdomain attack - not a port suffix |
+| `http://127.0.0.2` | `http://127.0.0.1` | **No** | Different IP |
+| `http://myapp.local:8080` | `http://myapp.local:8080` | Yes | Exact match |
+| `http://myapp.local:9090` | `http://myapp.local:8080` | Yes | Port variant |
+
+---
+
+### `--no-origin-check` - Disable origin checking
+
+Disables the `Origin` header check entirely. Any origin is allowed.
+
+```bash
+apfel --serve --no-origin-check
+```
+
+```
+├ cors:     disabled
+├ origin:   disabled (all origins allowed)
+```
+
+**What changes:**
+
+```bash
+# Foreign origins now allowed
+curl -H "Origin: http://evil.com" http://localhost:11434/v1/models
+# => 200 OK
+# => Access-Control-Allow-Origin: *
+
+# All requests get wildcard CORS header
+curl -H "Origin: http://anything.com" http://localhost:11434/v1/models
+# => 200 OK
+# => Access-Control-Allow-Origin: *
+```
+
+**Important:** When origin checking is disabled, the server automatically adds `Access-Control-Allow-Origin: *` to all responses so browsers can actually use the endpoint. However, without `--cors`, OPTIONS preflight requests don't include `Allow-Methods`/`Allow-Headers`, so browser POST requests may still fail.
+
+**For full browser access from any origin, use `--footgun` instead** (which combines `--no-origin-check` with `--cors`).
+
+**When to use:** Trusted networks where you know who's connecting, but you don't need full browser CORS support.
+
+---
+
+### `--token <secret>` - Require Bearer token authentication
+
+Adds a second layer of security: every request must include a Bearer token. Works independently of origin checking.
+
+```bash
+apfel --serve --token "my-secret-token"
+```
+
+```
+├ origin:   localhost only (http://127.0.0.1, http://localhost, http://[::1])
+├ token:    required
+```
+
+**What changes:**
+
+```bash
+# Without token - 401 Unauthorized
+curl http://localhost:11434/v1/models
+# => 401 Unauthorized
+# => WWW-Authenticate: Bearer
+# => {"error":{"message":"Invalid or missing Bearer token.","type":"authentication_error"}}
+
+# Wrong token - 401 Unauthorized
+curl -H "Authorization: Bearer wrong-token" http://localhost:11434/v1/models
+# => 401 Unauthorized
+
+# Correct token - 200 OK
+curl -H "Authorization: Bearer my-secret-token" http://localhost:11434/v1/models
+# => 200 OK
+
+# /health is ALWAYS exempt (monitoring tools need it)
+curl http://localhost:11434/health
+# => 200 OK (no token needed)
+
+# Python SDK - pass token as api_key
+python3 -c "
+from openai import OpenAI
+c = OpenAI(base_url='http://localhost:11434/v1', api_key='my-secret-token')
+print(c.models.list().data[0].id)
+"
+# => apple-foundationmodel
+```
+
+**Security note:** When using `--token` (not `--token-auto`), the secret is NOT printed in the startup banner. Only `token: required` is shown.
+
+**When to use:** Shared machines, multi-user environments, or any setup where you want to control who can use the model.
+
+---
+
+### `--token-auto` - Generate a random token
+
+Like `--token` but auto-generates a UUID and prints it on startup so you can copy it.
 
 ```bash
 apfel --serve --token-auto
 ```
 
-Share the printed token with authorized users.
+```
+├ token:    required
+├ token: E259FD6E-1220-49CA-95CE-66D14BB7FD4B
+└ ready
+```
 
-### Quick demo / testing
+The generated token is printed in the banner. Share it with authorized users or scripts:
 
-You want maximum openness for a short demo session:
+```bash
+# Use the printed token
+curl -H "Authorization: Bearer E259FD6E-1220-49CA-95CE-66D14BB7FD4B" http://localhost:11434/v1/models
+# => 200 OK
+```
+
+---
+
+### `APFEL_TOKEN` environment variable
+
+Set the token via environment variable. Useful for scripts and systemd services.
+
+```bash
+export APFEL_TOKEN="my-secret-token"
+apfel --serve
+# Banner shows: token: required (secret not echoed)
+```
+
+The `--token` flag overrides `APFEL_TOKEN`. The `--token-auto` flag overrides both (generates a new random one).
+
+---
+
+### `--footgun` - Disable all protections
+
+The nuclear option. Combines `--no-origin-check` and `--cors` to disable all security. This is the pre-0.6.23 behavior.
 
 ```bash
 apfel --serve --footgun
 ```
 
-### Production-like (locked down)
+```
+├ cors:     enabled
+├ origin:   disabled (all origins allowed)
+├ WARNING: --footgun mode - no origin check + CORS enabled
+├ Any website can access this server and read responses!
+└ ready
+```
 
-Specific origin, token auth, everything restricted:
+**What this means:**
+
+```bash
+# Any website can make requests
+curl -H "Origin: http://evil.com" http://localhost:11434/v1/models
+# => 200 OK
+# => Access-Control-Allow-Origin: *
+
+# Full CORS preflight works for any origin
+curl -X OPTIONS -H "Origin: http://evil.com" http://localhost:11434/v1/chat/completions -D - -o /dev/null
+# => 204 No Content
+# => Access-Control-Allow-Origin: *
+# => Access-Control-Allow-Methods: GET, POST, OPTIONS
+# => Access-Control-Allow-Headers: Content-Type, Authorization
+```
+
+**Equivalent to:** `--no-origin-check --cors`
+
+**When to use:** Quick demos, testing, or environments where you explicitly want zero restrictions and understand the risk.
+
+---
+
+## Check order
+
+The middleware checks in this order. The first failing check stops the request:
+
+```
+Request arrives
+    |
+    v
+1. Is it OPTIONS? --> Yes --> Return preflight (with CORS headers if --cors)
+    |
+    No
+    v
+2. Origin check enabled? --> Yes --> Is Origin allowed?
+    |                                    |
+    |                               No --> 403 Forbidden
+    |
+    v
+3. Token required? --> Yes --> Is /health? --> Yes --> Skip token check
+    |                              |
+    |                         No --> Valid token?
+    |                                    |
+    |                               No --> 401 Unauthorized
+    |
+    v
+4. Route handler (your actual request)
+    |
+    v
+5. Add CORS headers to response (if applicable)
+    |
+    v
+Response sent
+```
+
+This means:
+- **Origin check runs before token check.** A foreign origin gets 403 even with a valid token.
+- **`/health` is always accessible.** It skips token auth so monitoring tools work.
+- **OPTIONS preflight skips both checks.** Browsers need preflight to succeed before sending the real request.
+
+---
+
+## Common scenarios
+
+### I'm building a local web app
+
+Your React/Vite/Next.js dev server on `localhost:3000` needs to call apfel:
+
+```bash
+apfel --serve --cors --allowed-origins "http://localhost:3000"
+```
+
+Your JavaScript:
+
+```javascript
+const response = await fetch("http://localhost:11434/v1/chat/completions", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    model: "apple-foundationmodel",
+    messages: [{ role: "user", content: "Hello!" }]
+  })
+});
+const data = await response.json();
+```
+
+### I'm using curl or the Python SDK
+
+Just run the server. Nothing extra needed:
+
+```bash
+apfel --serve
+
+# curl works as-is
+curl -X POST http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"apple-foundationmodel","messages":[{"role":"user","content":"Hi"}]}'
+
+# Python SDK works as-is
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ignored")
+```
+
+### I want to share the server on my local network
+
+Bind to all interfaces and add token auth:
+
+```bash
+apfel --serve --host 0.0.0.0 --token-auto
+# Share the printed token with people on your network
+```
+
+Other machines connect with:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://192.168.1.42:11434/v1/models
+```
+
+### I need multiple dev servers to access apfel
+
+```bash
+apfel --serve --cors --allowed-origins "http://localhost:3000,http://localhost:5173,http://localhost:8080"
+```
+
+### I want maximum security (locked down)
 
 ```bash
 apfel --serve --cors --allowed-origins "http://localhost:3000" --token "$(openssl rand -hex 16)"
 ```
 
-### Old behavior (pre-0.6.21)
+This gives you: origin restricted to one specific app + token auth required + CORS for that app only.
 
-Before CSRF protection was added, `apfel --serve` accepted all origins:
+### I want the old behavior (before CSRF protection)
 
 ```bash
-# Exact equivalent of old default behavior:
+# Pre-0.6.23 default (accepted all origins, no CORS headers):
 apfel --serve --no-origin-check
 
-# Exact equivalent of old --cors behavior:
+# Pre-0.6.23 with --cors (accepted all origins + CORS headers):
 apfel --serve --footgun
 ```
 
+### Quick demo / hackathon
+
+```bash
+apfel --serve --footgun
+# WARNING banner printed - you know what you're doing
+```
+
+---
+
 ## Flag interaction matrix
 
-| Flags | Origin check | CORS headers | Who can access |
-|-------|-------------|-------------|----------------|
-| (default) | localhost only | none | curl, SDKs, localhost browsers (no read) |
-| `--cors` | localhost only | allowed origin | curl, SDKs, localhost browsers (can read) |
-| `--no-origin-check` | disabled | none | everyone (browsers can't read) |
-| `--footgun` | disabled | `*` | everyone (browsers can read) |
-| `--token X` | localhost only | none | only with valid token |
-| `--cors --allowed-origins X` | custom list | allowed origin | custom origins only |
+Every combination explained:
+
+| Flags | Origin check | CORS headers | Preflight | Who can connect | Who can read responses |
+|-------|-------------|-------------|-----------|-----------------|----------------------|
+| *(default)* | localhost only | on allowed requests | 204, no CORS | curl, SDKs, localhost browsers | curl, SDKs, localhost (simple GET only) |
+| `--cors` | localhost only | on allowed requests | 204 + full CORS | curl, SDKs, localhost browsers | curl, SDKs, localhost browsers (POST too) |
+| `--no-origin-check` | disabled | `*` on all | 204, no full CORS | everyone | everyone (simple GET only) |
+| `--footgun` | disabled | `*` on all | 204 + full CORS | everyone | everyone (POST too) |
+| `--token X` | localhost only | on allowed requests | 204, no CORS | token holders only (except /health) | token holders with localhost origin |
+| `--cors --token X` | localhost only | on allowed requests | 204 + full CORS | token holders from localhost | token holders from localhost browsers |
+| `--cors --allowed-origins X` | custom list | on allowed requests | 204 + full CORS | curl, SDKs, listed origins | curl, SDKs, listed origin browsers |
+| `--footgun --token X` | disabled | `*` on all | 204 + full CORS | token holders from anywhere | token holders from any browser |
+
+**Reading the table:**
+- "Who can connect" = whose requests get a 200 response
+- "Who can read responses" = whose browser JavaScript can read the response body (requires CORS headers)
+- "simple GET only" = browsers can read GET responses but POST requires full CORS preflight (`--cors`)
+
+---
 
 ## Severity assessment
 
 **Low.** Apple's on-device model cannot access the filesystem, network, or any system resources. The worst case from a localhost CSRF attack is:
 
 - **Compute abuse** - a website could use your GPU/NPU for inference
-- **Response exfiltration** - with `--cors` enabled, a website could read model responses
+- **Response exfiltration** - with CORS, a website could read model responses
 
 Still worth fixing - it's the right default, and it's what every other localhost LLM server has had to learn the hard way.
+
+---
+
+## Prior art
+
+| Project | What happened | Fix |
+|---------|--------------|-----|
+| [Ollama](https://blog.jaisal.dev/articles/oh-llama) | Same port 11434, CSRF via `fetch()`, no auth | Added origin check |
+| [Jupyter](https://blog.jupyter.org/security-release-jupyter-notebook-4-3-1-808e1f3bb5e2) | CSRF CVEs | Added token auth |
+| [0.0.0.0 Day](https://www.oligo.security/blog/0-0-0-0-day-exploiting-localhost-apis-from-the-browser) | Browsers block 0.0.0.0 but not 127.0.0.1 | Industry-wide awareness |
+| [175k+ Ollama instances](https://blogs.cisco.com/security/detecting-exposed-llm-servers-shodan-case-study-on-ollama) | Exposed on public internet | Don't bind 0.0.0.0 without auth |
+
+This issue was originally reported via [Hacker News discussion](https://news.ycombinator.com/item?id=47625563).
