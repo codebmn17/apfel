@@ -53,8 +53,17 @@ public struct OpenAIMessage: Codable, Sendable, Equatable {
         case .text(let text):
             return text
         case .parts(let parts):
-            guard !containsImageContent else { return nil }
-            return parts.compactMap(\.text).joined()
+            var segments: [String] = []
+            segments.reserveCapacity(parts.count)
+            for part in parts {
+                if part.type == "image_url" {
+                    return nil
+                }
+                if let text = part.text {
+                    segments.append(text)
+                }
+            }
+            return segments.joined()
         case .none:
             return nil
         }

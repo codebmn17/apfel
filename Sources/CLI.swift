@@ -180,7 +180,7 @@ func chat(systemPrompt: String?, options: SessionOptions = .defaults) async thro
 
             // Context window protection: check transcript size after each turn
             let transcript = session.transcript
-            let tokenCount = await TokenCounter.shared.count(entries: Array(Array(transcript)))
+            let tokenCount = await TokenCounter.shared.count(entries: transcriptEntries(transcript))
             let budget = await TokenCounter.shared.inputBudget(reservedForOutput: options.contextConfig.outputReserve)
             if tokenCount > budget {
                 do {
@@ -215,7 +215,7 @@ func chat(systemPrompt: String?, options: SessionOptions = .defaults) async thro
 
 /// Truncate a transcript to fit within the token budget using the configured strategy.
 func truncateTranscript(_ transcript: Transcript, budget: Int, config: ContextConfig = .defaults) async throws -> Transcript {
-    let entries = Array(Array(transcript))
+    let entries = transcriptEntries(transcript)
     guard !entries.isEmpty else { return transcript }
 
     let baseEntries: [Transcript.Entry]
@@ -303,6 +303,7 @@ func printUsage() {
       \(appName) --chat                   Interactive conversation
       \(appName) --stream <prompt>        Stream a single response
       \(appName) --serve                  Start OpenAI-compatible HTTP server
+      \(appName) --benchmark              Run internal performance benchmarks
 
     \(styled("OPTIONS:", .yellow, .bold))
       -f, --file <path>         Attach file content to prompt (repeatable)
@@ -317,6 +318,7 @@ func printUsage() {
           --mcp <path>           Attach MCP tool server (repeatable)
           --permissive           Use permissive content guardrails
           --model-info           Print model capabilities and exit
+          --benchmark            Run internal performance benchmarks
       -h, --help                Show this help
       -v, --version             Print version
           --release             Show detailed release and build info

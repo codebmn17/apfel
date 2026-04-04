@@ -2,7 +2,7 @@ PREFIX ?= /usr/local
 BINARY = apfel
 VERSION_FILE = .version
 
-.PHONY: check-toolchain build install uninstall clean bump-patch bump-minor bump-major generate-build-info update-readme version release-minor release-major package-release-asset print-release-asset print-release-sha256 update-homebrew-formula
+.PHONY: check-toolchain build install uninstall clean bump-patch bump-minor bump-major generate-build-info update-readme version release-minor release-major package-release-asset print-release-asset print-release-sha256 update-homebrew-formula benchmark
 
 # --- Environment checks ---
 
@@ -129,6 +129,14 @@ uninstall:
 
 clean:
 	swift package clean
+
+benchmark:
+	@if [ -x "$(PREFIX)/bin/$(BINARY)" ]; then \
+		$(PREFIX)/bin/$(BINARY) --benchmark -o json; \
+	else \
+		echo "error: missing $(PREFIX)/bin/$(BINARY). Run make install first."; \
+		exit 1; \
+	fi
 
 package-release-asset:
 	@v=$$(cat $(VERSION_FILE)); \

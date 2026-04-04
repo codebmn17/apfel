@@ -247,6 +247,7 @@ private func streamingResponse(
             var responseLines: [String] = []
             var streamError: String?
             var streamCancelled = false
+            var completionTokens = 0
 
             defer {
                 Task {
@@ -285,6 +286,8 @@ private func streamingResponse(
 
                 // Check accumulated response for tool calls before emitting final chunk
                 let toolCalls = ToolCallHandler.detectToolCall(in: prev)
+                completionTokens = await TokenCounter.shared.count(prev)
+                let finishReason: String
                 if let calls = toolCalls {
                     let openAIToolCalls = calls.map {
                         ToolCall(id: $0.id, type: "function",
@@ -303,9 +306,9 @@ private func streamingResponse(
                     responseLines.append(toolLine.trimmingCharacters(in: .whitespacesAndNewlines))
                     continuation.yield(ByteBuffer(string: toolLine))
                     eventBox.append("tool_calls detected: \(calls.map(\.name).joined(separator: ", "))")
+                    finishReason = "tool_calls"
                 } else {
                     // Detect truncation
-                    let completionTokens = await TokenCounter.shared.count(prev)
                     var streamFinish = "stop"
                     if let maxTok = genOpts.maximumResponseTokens, completionTokens >= maxTok {
                         streamFinish = "length"
@@ -318,10 +321,10 @@ private func streamingResponse(
                     let stopLine = sseDataLine(stopChunk)
                     responseLines.append(stopLine.trimmingCharacters(in: .whitespacesAndNewlines))
                     continuation.yield(ByteBuffer(string: stopLine))
+                    finishReason = streamFinish
                 }
 
                 // Emit usage stats as a proper chunk before [DONE]
-                let completionTokens = await TokenCounter.shared.count(prev)
                 let usageChunk = sseUsageChunk(id: id, created: created, promptTokens: promptTokens, completionTokens: completionTokens)
                 let usageLine = sseDataLine(usageChunk)
                 responseLines.append(usageLine.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -329,7 +332,6 @@ private func streamingResponse(
 
                 continuation.yield(ByteBuffer(string: sseDone))
                 responseLines.append("data: [DONE]")
-                let finishReason = toolCalls != nil ? "tool_calls" : "stop"
                 eventBox.append("sent [DONE] total_chars=\(prev.count) finish_reason=\(finishReason)")
             } catch is CancellationError {
                 streamCancelled = true
@@ -355,7 +357,7 @@ private func streamingResponse(
                 status: streamCancelled ? 499 : (streamError == nil ? 200 : 500),
                 duration_ms: Int(Date().timeIntervalSince(streamStart) * 1000),
                 stream: true,
-                estimated_tokens: await TokenCounter.shared.count(prev),
+                estimated_tokens: completionTokens,
                 error: streamError,
                 request_body: loggedBody(requestBody),
                 response_body: loggedBody(responseLines.joined(separator: "\n\n")),

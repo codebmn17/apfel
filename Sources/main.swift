@@ -153,6 +153,9 @@ while i < args.count {
     case "--serve":
         mode = "serve"
 
+    case "--benchmark":
+        mode = "benchmark"
+
     case "--port":
         i += 1
         guard i < args.count, let p = Int(args[i]), p > 0, p < 65536 else {
@@ -409,6 +412,9 @@ do {
 
     case "model-info":
         await printModelInfo()
+
+    case "benchmark":
+        try await runBenchmarks()
 
     case "chat":
         try await chat(systemPrompt: systemPrompt, options: sessionOpts)

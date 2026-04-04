@@ -23,18 +23,13 @@ func trimWithSummary(
 
     // Split: keep recent 50% of budget, summarize the rest
     let halfBudget = budget / 2
-    var recentEntries: [Transcript.Entry] = []
-    for entry in history.reversed() {
-        if !(await fitsTranscriptBudget(
-            base: base,
-            history: [entry] + recentEntries,
-            final: final,
-            budget: halfBudget
-        )) {
-            break
-        }
-        recentEntries.insert(entry, at: 0)
-    }
+    let recentCount = await maxNewestHistoryCountThatFits(
+        base: base,
+        history: history,
+        final: final,
+        budget: halfBudget
+    )
+    let recentEntries = Array(history.suffix(recentCount))
 
     let oldEntries = Array(history.dropLast(recentEntries.count))
     guard !oldEntries.isEmpty else {

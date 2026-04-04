@@ -75,20 +75,29 @@ func makeTranscriptSession(model: SystemLanguageModel, entries: [Transcript.Entr
     return LanguageModelSession(model: model, transcript: Transcript(entries: entries))
 }
 
+func transcriptEntries(_ transcript: Transcript) -> [Transcript.Entry] {
+    Array(transcript)
+}
+
 func sessionInputEntries(
     _ session: LanguageModelSession,
     finalPrompt: String,
     options: SessionOptions = .defaults
 ) -> [Transcript.Entry] {
-    Array(Array(session.transcript)) + [makePromptEntry(finalPrompt, options: options)]
+    var entries = transcriptEntries(session.transcript)
+    entries.append(makePromptEntry(finalPrompt, options: options))
+    return entries
 }
 
-func assembleTranscriptEntries(
-    base: [Transcript.Entry],
-    history: [Transcript.Entry],
+func assembleTranscriptEntries<BaseEntries: Collection, HistoryEntries: Collection>(
+    base: BaseEntries,
+    history: HistoryEntries,
     final: Transcript.Entry? = nil
-) -> [Transcript.Entry] {
-    var entries = base
+) -> [Transcript.Entry]
+where BaseEntries.Element == Transcript.Entry, HistoryEntries.Element == Transcript.Entry {
+    var entries: [Transcript.Entry] = []
+    entries.reserveCapacity(base.count + history.count + (final == nil ? 0 : 1))
+    entries.append(contentsOf: base)
     entries.append(contentsOf: history)
     if let final {
         entries.append(final)
@@ -109,6 +118,19 @@ func fitsTranscriptBudget(
     final: Transcript.Entry? = nil,
     budget: Int
 ) async -> Bool {
+    await fitsTranscriptBudget(
+        assembleTranscriptEntries(base: base, history: history, final: final),
+        budget: budget
+    )
+}
+
+func fitsTranscriptBudget<BaseEntries: Collection, HistoryEntries: Collection>(
+    base: BaseEntries,
+    history: HistoryEntries,
+    final: Transcript.Entry? = nil,
+    budget: Int
+) async -> Bool
+where BaseEntries.Element == Transcript.Entry, HistoryEntries.Element == Transcript.Entry {
     await fitsTranscriptBudget(
         assembleTranscriptEntries(base: base, history: history, final: final),
         budget: budget
@@ -156,14 +178,13 @@ func trimNewestFirst(
     base: [Transcript.Entry], history: [Transcript.Entry],
     final: Transcript.Entry?, budget: Int
 ) async -> [Transcript.Entry] {
-    var kept: [Transcript.Entry] = []
-    for entry in history.reversed() {
-        if !(await fitsTranscriptBudget(base: base, history: [entry] + kept, final: final, budget: budget)) {
-            break
-        }
-        kept.insert(entry, at: 0)
-    }
-    return assembleTranscriptEntries(base: base, history: kept)
+    let keepCount = await maxNewestHistoryCountThatFits(
+        base: base,
+        history: history,
+        final: final,
+        budget: budget
+    )
+    return assembleTranscriptEntries(base: base, history: history.suffix(keepCount))
 }
 
 // MARK: - Strategy: Oldest First
@@ -172,14 +193,13 @@ func trimOldestFirst(
     base: [Transcript.Entry], history: [Transcript.Entry],
     final: Transcript.Entry?, budget: Int
 ) async -> [Transcript.Entry] {
-    var kept: [Transcript.Entry] = []
-    for entry in history {
-        if !(await fitsTranscriptBudget(base: base, history: kept + [entry], final: final, budget: budget)) {
-            break
-        }
-        kept.append(entry)
-    }
-    return assembleTranscriptEntries(base: base, history: kept)
+    let keepCount = await maxOldestHistoryCountThatFits(
+        base: base,
+        history: history,
+        final: final,
+        budget: budget
+    )
+    return assembleTranscriptEntries(base: base, history: history.prefix(keepCount))
 }
 
 // MARK: - Strategy: Sliding Window
@@ -221,4 +241,48 @@ func collectStream(
         prev = content
     }
     return prev
+}
+
+func maxNewestHistoryCountThatFits(
+    base: [Transcript.Entry],
+    history: [Transcript.Entry],
+    final: Transcript.Entry?,
+    budget: Int
+) async -> Int {
+    guard !history.isEmpty else { return 0 }
+
+    var low = 0
+    var high = history.count
+    while low < high {
+        let mid = (low + high + 1) / 2
+        let candidate = history.suffix(mid)
+        if await fitsTranscriptBudget(base: base, history: candidate, final: final, budget: budget) {
+            low = mid
+        } else {
+            high = mid - 1
+        }
+    }
+    return low
+}
+
+private func maxOldestHistoryCountThatFits(
+    base: [Transcript.Entry],
+    history: [Transcript.Entry],
+    final: Transcript.Entry?,
+    budget: Int
+) async -> Int {
+    guard !history.isEmpty else { return 0 }
+
+    var low = 0
+    var high = history.count
+    while low < high {
+        let mid = (low + high + 1) / 2
+        let candidate = history.prefix(mid)
+        if await fitsTranscriptBudget(base: base, history: candidate, final: final, budget: budget) {
+            low = mid
+        } else {
+            high = mid - 1
+        }
+    }
+    return low
 }
