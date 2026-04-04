@@ -1,6 +1,6 @@
 # apfel
 
-[![Version 0.6.35](https://img.shields.io/badge/version-0.6.35-blue)](https://github.com/Arthur-Ficial/apfel)
+[![Version 0.7.1](https://img.shields.io/badge/version-0.7.1-blue)](https://github.com/Arthur-Ficial/apfel)
 [![Swift 6.3+](https://img.shields.io/badge/Swift-6.3%2B-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![macOS 26+](https://img.shields.io/badge/macOS-26%2B-000000?logo=apple&logoColor=white)](https://developer.apple.com/macos/)
 [![No Xcode Required](https://img.shields.io/badge/Xcode-not%20required-orange)](https://developer.apple.com/xcode/resources/)
@@ -261,20 +261,27 @@ Chat, debug inspector, request logs, context settings, speech-to-text, text-to-s
 
 Full API spec: [openai/openai-openapi](https://github.com/openai/openai-openapi)
 
-### MCP Calculator
+### Native MCP Support
 
-apfel ships with an [MCP](https://modelcontextprotocol.io/) calculator server that gives the model math abilities via tool calling:
+Attach [MCP](https://modelcontextprotocol.io/) tool servers with `--mcp`. apfel discovers tools, executes them automatically, and returns the final answer. No glue code needed.
 
 ```bash
-apfel --serve &
-python3 mcp/calculator/test_round_trip.py
-# Question: What is 247 times 83?
-# Step 1: Model called multiply({"a": 247, "b": 83})
-# Step 2: Calculator result: 20501
-# Step 3: Final answer: The product of 247 and 83 is 20,501.
+# Give the model a calculator
+apfel --mcp ./mcp/calculator/server.py "What is 15 times 27?"
+# tool: multiply({"a": 15, "b": 27}) = 405
+# 15 times 27 is 405.
+
+# Multiple MCP servers
+apfel --mcp ./calc.py --mcp ./weather.py "What is sqrt(2025)?"
+
+# Server mode - tools auto-available to all clients
+apfel --serve --mcp ./mcp/calculator/server.py
+
+# No --mcp = exactly as before. Zero overhead.
+apfel "What is 2+2?"
 ```
 
-See [MCP Calculator docs](docs/mcp-calculator.md) for setup with Claude Desktop and full protocol details.
+Ships with a calculator MCP server at `mcp/calculator/`. See [MCP docs](docs/mcp-calculator.md) for details and how to build your own.
 
 ## Limitations
 

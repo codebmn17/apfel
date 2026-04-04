@@ -31,11 +31,13 @@ final class ServerState: Sendable {
     let logStore: LogStore
     let semaphore: AsyncSemaphore
     let config: ServerConfig
+    let mcpManager: MCPManager?
 
-    init(config: ServerConfig) {
+    init(config: ServerConfig, mcpManager: MCPManager? = nil) {
         self.logStore = LogStore(capacity: 1000)
         self.semaphore = AsyncSemaphore(value: config.maxConcurrent)
         self.config = config
+        self.mcpManager = mcpManager
     }
 }
 
@@ -43,8 +45,8 @@ final class ServerState: Sendable {
 nonisolated(unsafe) var serverState: ServerState!
 
 /// Start the OpenAI-compatible HTTP server.
-func startServer(config: ServerConfig) async throws {
-    serverState = ServerState(config: config)
+func startServer(config: ServerConfig, mcpManager: MCPManager? = nil) async throws {
+    serverState = ServerState(config: config, mcpManager: mcpManager)
     let router = Router()
 
     // Security middleware: origin check, token auth, CORS headers

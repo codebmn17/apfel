@@ -81,6 +81,16 @@ func handleChatCompletion(_ request: Request, context: some RequestContext) asyn
         contextConfig: contextConfig
     )
 
+    // Inject MCP tools if client didn't send any
+    let effectiveTools: [OpenAITool]?
+    if let clientTools = chatRequest.tools, !clientTools.isEmpty {
+        effectiveTools = clientTools
+    } else if let mcp = serverState.mcpManager {
+        effectiveTools = await mcp.allTools()
+    } else {
+        effectiveTools = chatRequest.tools
+    }
+
     // Build session + extract final prompt via ContextManager (Transcript API)
     let session: LanguageModelSession
     let finalPrompt: String
@@ -88,7 +98,7 @@ func handleChatCompletion(_ request: Request, context: some RequestContext) asyn
         let jsonMode = chatRequest.response_format?.type == "json_object"
         (session, finalPrompt) = try await ContextManager.makeSession(
             messages: chatRequest.messages,
-            tools: chatRequest.tools,
+            tools: effectiveTools,
             options: sessionOpts,
             jsonMode: jsonMode,
             toolChoice: chatRequest.tool_choice

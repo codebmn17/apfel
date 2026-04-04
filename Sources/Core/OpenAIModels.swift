@@ -103,17 +103,32 @@ public struct ContentPart: Codable, Sendable, Equatable {
 public struct OpenAITool: Decodable, Sendable {
     public let type: String
     public let function: OpenAIFunction
+
+    public init(type: String, function: OpenAIFunction) {
+        self.type = type
+        self.function = function
+    }
 }
 
 public struct OpenAIFunction: Decodable, Sendable {
     public let name: String
     public let description: String?
     public let parameters: RawJSON?
+
+    public init(name: String, description: String?, parameters: RawJSON?) {
+        self.name = name
+        self.description = description
+        self.parameters = parameters
+    }
 }
 
 /// Stores arbitrary JSON as a raw string — used for tool parameter schemas.
 public struct RawJSON: Decodable, Sendable, Equatable {
     public let value: String
+
+    public init(rawValue: String) {
+        self.value = rawValue
+    }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()

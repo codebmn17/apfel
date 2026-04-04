@@ -32,28 +32,65 @@ func printHeader() {
 /// Behavior depends on output format:
 /// - **plain**: Print response directly. If streaming, print tokens as they arrive.
 /// - **json**: Buffer the complete response, then emit a single JSON object.
-func singlePrompt(_ prompt: String, systemPrompt: String?, stream: Bool, options: SessionOptions = .defaults) async throws {
-    let session = makeSession(systemPrompt: systemPrompt, options: options)
+func singlePrompt(_ prompt: String, systemPrompt: String?, stream: Bool, options: SessionOptions = .defaults, mcpManager: MCPManager? = nil) async throws {
+    let mcpTools = await mcpManager?.allTools() ?? []
+    let hasMCPTools = !mcpTools.isEmpty
+
+    // If MCP tools available, build session via ContextManager (same path as server)
+    let session: LanguageModelSession
+    let finalPrompt: String
+    if hasMCPTools {
+        let messages: [OpenAIMessage] = {
+            var msgs: [OpenAIMessage] = []
+            if let sys = systemPrompt { msgs.append(OpenAIMessage(role: "system", content: .text(sys))) }
+            msgs.append(OpenAIMessage(role: "user", content: .text(prompt)))
+            return msgs
+        }()
+        (session, finalPrompt) = try await ContextManager.makeSession(
+            messages: messages, tools: mcpTools, options: options, jsonMode: false, toolChoice: nil)
+    } else {
+        session = makeSession(systemPrompt: systemPrompt, options: options)
+        finalPrompt = prompt
+    }
     let genOpts = makeGenerationOptions(options)
+
+    // Get response (with tool execution loop if MCP tools present)
+    var content: String
+    if stream {
+        content = try await collectStream(session, prompt: finalPrompt, printDelta: !hasMCPTools && outputFormat == .plain, options: genOpts)
+    } else {
+        let response = try await session.respond(to: finalPrompt, options: genOpts)
+        content = response.content
+    }
+
+    // Tool execution: detect tool call, execute via MCP, then ask model for plain text answer
+    if let mcpManager, let toolCalls = ToolCallHandler.detectToolCall(in: content) {
+        var resultParts: [String] = []
+        for call in toolCalls {
+            do {
+                let result = try await mcpManager.execute(name: call.name, arguments: call.argumentsString)
+                resultParts.append("\(call.name): \(result)")
+                if !quietMode { printStderr("\(styled("tool:", .cyan)) \(call.name)(\(call.argumentsString)) = \(result)") }
+            } catch {
+                resultParts.append("\(call.name): error - \(error)")
+                if !quietMode { printStderr("\(styled("tool:", .red)) \(call.name) failed: \(error)") }
+            }
+        }
+        // Re-prompt WITHOUT tools so model gives a plain text answer
+        let plainSession = makeSession(systemPrompt: systemPrompt)
+        let toolResult = resultParts.joined(separator: "\n")
+        let finalResponse = try await plainSession.respond(to: "The user asked: \(prompt)\n\nThe tool returned: \(toolResult)\n\nAnswer the user's question using this result.", options: genOpts)
+        content = finalResponse.content
+    }
 
     switch outputFormat {
     case .plain:
-        if stream {
-            let _ = try await collectStream(session, prompt: prompt, printDelta: true, options: genOpts)
+        if hasMCPTools || !stream {
+            print(content)
+        } else {
             print()
-        } else {
-            let response = try await session.respond(to: prompt, options: genOpts)
-            print(response.content)
         }
-
     case .json:
-        let content: String
-        if stream {
-            content = try await collectStream(session, prompt: prompt, printDelta: false, options: genOpts)
-        } else {
-            let response = try await session.respond(to: prompt, options: genOpts)
-            content = response.content
-        }
         let obj = ApfelResponse(
             model: modelName,
             content: content,
@@ -277,6 +314,7 @@ func printUsage() {
           --temperature <n>      Sampling temperature (e.g., 0.7)
           --seed <n>             Random seed for reproducible output
           --max-tokens <n>       Maximum response tokens
+          --mcp <path>           Attach MCP tool server (repeatable)
           --permissive           Use permissive content guardrails
           --model-info           Print model capabilities and exit
       -h, --help                Show this help

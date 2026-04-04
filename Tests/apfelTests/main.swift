@@ -50,6 +50,7 @@ suite("ContextStrategyTests") { runContextStrategyTests() }
 suite("OpenAIModelsTests") { runOpenAIModelsTests() }
 suite("ChatRequestValidatorTests") { runChatRequestValidatorTests() }
 suite("OriginValidatorTests") { runOriginValidatorTests() }
+suite("MCPClientTests") { runMCPClientTests() }
 
 // MARK: - Summary
 
