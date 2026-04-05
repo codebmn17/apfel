@@ -54,7 +54,7 @@ HTTP Server (/v1/*) ───────┘   ContextManager → Transcript API
 
 ## Current Status
 
-- Version source of truth: `.version` (currently `0.8.1`)
+- Version source of truth: `.version` (currently `0.8.2`)
 - Tests: `129` unit + `124` integration (full suite ~55 seconds)
 - Issues `#34` (arrow keys) and `#35` (MCP auto-execute) fixed in v0.8.1
 - GitHub issue `#33` is closed; the landing page example lives in a separate repo
@@ -114,20 +114,103 @@ When a new issue comes in, follow this process:
    - Write tests first (TDD) for bugs
    - Keep changes minimal and KISS
    - `make install` + run all tests (`swift run apfel-tests` + `python3 -m pytest Tests/integration/ -v`)
-4. **Release** if code changed:
-   - `make install` (auto-bumps version)
-   - `make package-release-asset` + `gh release create` + upload asset
-   - Update `homebrew-tap/Formula/apfel.rb` (url, sha256, version test)
-   - `brew reinstall` + `brew test` to verify
+4. **Release** if code changed - see "Publishing a Release" below
 5. **Close** the issue with a friendly, short, truthful comment:
    - What was the problem
    - What was fixed (or why it was closed without a fix)
    - How to update (`brew upgrade apfel`)
 6. **Landing page** (apfel.franzai.com) is a separate Cloudflare Pages project, not in this repo
 
+## Publishing a Release
+
+### Preferred: GitHub Actions (fully automated)
+
+The **Publish Release** workflow handles everything end-to-end:
+
+1. Go to **Actions** tab in `Arthur-Ficial/apfel`
+2. Run **Publish Release**, choose `patch`, `minor`, or `major`
+3. The workflow will:
+   - Bump `.version` via `make build` / `make release-minor` / `make release-major`
+   - Build the release binary on `macos-26`
+   - Run unit tests (`swift run apfel-tests`)
+   - Commit `.version`, `README.md`, `Sources/BuildInfo.swift` and push to `main`
+   - Create a git tag (`v<version>`) and push it
+   - Package `apfel-<version>-arm64-macos.tar.gz` and publish a GitHub Release
+   - Clone `Arthur-Ficial/homebrew-tap`, regenerate `Formula/apfel.rb` with the new URL + SHA256, commit and push
+4. After the workflow completes, verify: `brew update && brew upgrade apfel && brew test apfel`
+
+This is the preferred path for all releases. One click, fully tested, tap updated automatically.
+
+### Fallback: manual local release
+
+Use this only if the GitHub Actions runner is broken or you need to release from local changes that aren't pushed yet.
+
+```bash
+# 1. Build and install (auto-bumps patch version)
+make install                           # bumps .version, builds release, installs to /usr/local/bin
+
+# 2. Run ALL tests - no exceptions, no skips
+swift run apfel-tests                  # unit tests (must be 129+)
+# Start both servers for integration tests:
+apfel --serve --port 11434 &
+apfel --serve --port 11435 --mcp mcp/calculator/server.py &
+sleep 3
+python3 -m pytest Tests/integration/ -v   # integration tests (must be 124+, 0 skipped)
+pkill -f "apfel --serve"
+
+# 3. Package the release asset
+make package-release-asset             # creates apfel-<version>-arm64-macos.tar.gz
+make print-release-sha256              # SHA256 for homebrew formula
+
+# 4. Commit, tag, push
+git add .version README.md Sources/BuildInfo.swift <changed source files>
+git commit -m "release: apfel v<version> - <summary>"
+git tag -a "v<version>" -m "v<version>"
+git push origin main
+git push origin "v<version>"
+
+# 5. Create GitHub Release
+gh release create "v<version>" "apfel-<version>-arm64-macos.tar.gz" \
+  --repo Arthur-Ficial/apfel \
+  --title "v<version>" \
+  --notes "Release notes here"
+
+# 6. Update homebrew tap
+git clone git@github.com:Arthur-Ficial/homebrew-tap.git /tmp/homebrew-tap
+./scripts/write-homebrew-formula.sh \
+  --version "<version>" \
+  --sha256 "<sha256 from step 3>" \
+  --output "/tmp/homebrew-tap/Formula/apfel.rb"
+cd /tmp/homebrew-tap && git add Formula/apfel.rb && git commit -m "apfel v<version>" && git push
+
+# 7. Verify brew install
+brew update
+brew reinstall Arthur-Ficial/tap/apfel
+brew test Arthur-Ficial/tap/apfel
+apfel --version                        # must show the new version
+```
+
+### Integration test rules
+
+- **Never skip tests.** A skipped test is a critical error.
+- Integration tests require two running servers: port 11434 (plain) and port 11435 (with MCP calculator).
+- If servers aren't running, tests skip silently - this is NOT acceptable. Always start them.
+- After releasing, run the full suite against the brew-installed binary as final verification.
+
+### Post-release checklist
+
+- [ ] Unit tests pass (129+)
+- [ ] Integration tests pass (124+, 0 skipped)
+- [ ] GitHub Release created with tarball
+- [ ] Homebrew tap updated and `brew test` passes
+- [ ] CLAUDE.md test counts and version updated
+- [ ] File a ticket on `Arthur-Ficial/apfel-web` if the landing page shows test counts
+
 ## CI / GitHub Actions
 
 - **`macos-26` runner** has Xcode-bundled SDKs (not standalone CLT). The workflow selects the latest available Xcode via `xcode-select` before building.
 - apfel requires **SDK 26.4+** for FoundationModels token-counting APIs (`tokenCount`, `contextSize`). If the runner's highest Xcode is older, the build will fail.
 - **`HOMEBREW_TAP_PUSH_TOKEN`** secret must exist on `Arthur-Ficial/apfel` - fine-grained token with Contents R/W on `Arthur-Ficial/homebrew-tap`.
+- The **Publish Release** workflow (`.github/workflows/publish-release.yml`) is the single source of truth for the release pipeline. It handles version bump, build, test, tag, GitHub Release, and homebrew tap update in one run.
+- The **CI** workflow (`.github/workflows/ci.yml`) runs on PRs and pushes for build + test validation.
 - Release docs: `docs/release.md`
