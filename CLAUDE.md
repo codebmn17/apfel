@@ -52,6 +52,13 @@ HTTP Server (/v1/*) ───────┘   ContextManager → Transcript API
 - Tests: `swift run apfel-tests` (pure Swift runner, no XCTest needed)
 - No Xcode required - builds with Command Line Tools only
 
+## Current Status
+
+- Version source of truth: `.version` (currently `0.7.8` in this workspace)
+- Tests: `118` unit + `97` integration
+- Latest GitHub issue before this local fix: `#34` (`Arrow key navigation in chat mode`)
+- GitHub issue `#33` is closed; the landing page example lives in a separate repo
+
 ## Build & Test
 
 ```bash
@@ -90,7 +97,7 @@ python3 -m pytest Tests/integration/ -v    # release-binary integration tests
 | Security | `Sources/Core/OriginValidator.swift`, `Sources/SecurityMiddleware.swift` |
 | MCP client | `Sources/Core/MCPProtocol.swift`, `Sources/MCPClient.swift` |
 | MCP calculator | `mcp/calculator/server.py` |
-| Tests | `Tests/apfelTests/` (118 unit), `Tests/integration/` (87 integration) |
+| Tests | `Tests/apfelTests/` (118 unit), `Tests/integration/` (97 integration) |
 | Tickets | `open-tickets/` |
 | Docs | `docs/` (brew-install, EXAMPLES, release, tool-calling-guide) |
 

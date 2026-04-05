@@ -75,7 +75,7 @@ make install
 ## Verify
 
 ```bash
-apfel "Hello, world!"
+apfel 'Hello, world!'
 apfel --version
 apfel --release       # full build info
 ```

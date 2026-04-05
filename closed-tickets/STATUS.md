@@ -1,9 +1,9 @@
 # apfel — Status Overview
 
-**Version:** 0.6.6
-**Date:** 2026-03-31
-**Build:** ✅ Clean (`make install`, Swift 6.3 / macOS 26.4 SDK)
-**Tests:** ✅ 51 unit tests + 51 integration tests + Homebrew tap install/test/audit
+**Version:** 0.7.8
+**Date:** 2026-04-05
+**Build:** Local release builds are clean with Swift 6.3 / macOS 26.4 SDK
+**Tests:** ✅ 118 unit tests + 97 integration tests
 
 ---
 
@@ -13,12 +13,11 @@
 |------|--------|----------|
 | **UNIX tool** | ✅ 100% | Pipe, stdin, `--json`, `--quiet`, exit codes (0-6), `NO_COLOR`, env vars, `--system-file`, `--temperature/seed/max-tokens/permissive/model-info` |
 | **OpenAI server** | ✅ 100% | `/v1/chat/completions` (stream+non-stream), `/v1/models`, `/health`, tools (native ToolDefinition), `response_format`, `finish_reason` (stop/tool_calls/length), CORS, 501 stubs, real token counts, streaming usage stats |
-| **CLI chat** | ✅ 100% | Multi-turn, context rotation, typed errors, system prompt |
-| **Debug GUI** | ✅ 100% | Request/response JSON, curl commands, logs, TTS/STT, token budget bar, real token counts from server |
+| **CLI chat** | ✅ 100% | Multi-turn, context rotation, typed errors, system prompt, line editing + session-local history |
 | **On-device** | ✅ 100% | SystemLanguageModel only. Zero network. Zero cloud. |
 | **Honest** | ✅ 100% | 501 for unsupported, real token counts, typed errors, semantic exit codes |
 
-## All Tickets Resolved
+## Closed Tickets Snapshot
 
 | # | Title | Resolved in |
 |---|-------|-------------|
@@ -41,4 +40,7 @@
 | 017 | Consolidate transcript budget candidate assembly | v0.6.4 |
 | 018 | Publish apfel via Homebrew tap | v0.6.4 |
 
-**Zero open tickets.**
+## Active GitHub Issue Snapshot
+
+- `#34` `Arrow key navigation in chat mode` was the latest open UX bug at this snapshot.
+- `#33` `Webpage example doesn't work due to exclamation mark` is closed.
