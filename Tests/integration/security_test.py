@@ -379,3 +379,85 @@ def test_public_health_keeps_non_loopback_health_open():
     ) as (base_url, _):
         resp = httpx.get(f"{base_url}/health", timeout=10)
     assert resp.status_code == 200
+
+
+# MARK: - CORS Allow-Headers (issue #40)
+
+def test_footgun_preflight_allows_openai_sdk_headers():
+    """--footgun preflight must allow x-stainless-* headers sent by the OpenAI SDK."""
+    with running_server("--footgun") as (base_url, _):
+        resp = httpx.options(
+            f"{base_url}/v1/chat/completions",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Content-Type, Authorization, x-stainless-os, x-stainless-lang, x-stainless-arch, x-stainless-runtime",
+            },
+            timeout=10,
+        )
+    assert resp.status_code == 204
+    allowed = resp.headers.get("access-control-allow-headers", "")
+    # Either wildcard or the echoed request headers must include x-stainless-*
+    if allowed == "*":
+        pass  # wildcard allows everything
+    else:
+        assert "x-stainless-os" in allowed.lower()
+        assert "x-stainless-lang" in allowed.lower()
+        assert "x-stainless-arch" in allowed.lower()
+        assert "x-stainless-runtime" in allowed.lower()
+
+
+def test_footgun_preflight_allows_arbitrary_headers():
+    """--footgun should allow ANY custom header in preflight, not just known ones."""
+    with running_server("--footgun") as (base_url, _):
+        resp = httpx.options(
+            f"{base_url}/v1/chat/completions",
+            headers={
+                "Origin": "http://example.com",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Content-Type, X-Custom-Foo, X-My-Header",
+            },
+            timeout=10,
+        )
+    assert resp.status_code == 204
+    allowed = resp.headers.get("access-control-allow-headers", "")
+    if allowed == "*":
+        pass  # wildcard allows everything
+    else:
+        assert "x-custom-foo" in allowed.lower()
+        assert "x-my-header" in allowed.lower()
+
+
+def test_cors_preflight_echoes_requested_headers():
+    """--cors mode should echo back the Access-Control-Request-Headers value."""
+    with running_server("--cors", "--no-origin-check") as (base_url, _):
+        requested = "Content-Type, Authorization, x-stainless-os, x-stainless-lang"
+        resp = httpx.options(
+            f"{base_url}/v1/chat/completions",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": requested,
+            },
+            timeout=10,
+        )
+    assert resp.status_code == 204
+    allowed = resp.headers.get("access-control-allow-headers", "")
+    # In --cors mode (no --footgun), echo back the requested headers
+    assert "x-stainless-os" in allowed.lower()
+    assert "x-stainless-lang" in allowed.lower()
+
+
+def test_default_preflight_still_works_without_cors():
+    """Without --cors flag, OPTIONS should return 204 but no CORS headers."""
+    resp = httpx.options(
+        f"{BASE_URL}/v1/chat/completions",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Content-Type, Authorization, x-stainless-os",
+        },
+        timeout=10,
+    )
+    assert resp.status_code == 204
+    assert "access-control-allow-headers" not in resp.headers

@@ -21,7 +21,8 @@ struct SecurityMiddleware<Context: RequestContext>: RouterMiddleware {
 
         // OPTIONS preflight: return CORS headers, skip origin/token checks
         if request.method == .options {
-            return preflightResponse(origin: origin)
+            let requestedHeaders = request.headers[.init("Access-Control-Request-Headers")!]
+            return preflightResponse(origin: origin, requestedHeaders: requestedHeaders)
         }
 
         // Origin check (enabled by default)
@@ -61,12 +62,16 @@ struct SecurityMiddleware<Context: RequestContext>: RouterMiddleware {
 
     // MARK: - Private
 
-    private func preflightResponse(origin: String?) -> Response {
+    private func preflightResponse(origin: String?, requestedHeaders: String? = nil) -> Response {
         var headers = HTTPFields()
         if config.cors {
             applyCORSHeaders(to: &headers, requestOrigin: origin)
             headers[.init("Access-Control-Allow-Methods")!] = "GET, POST, OPTIONS"
-            headers[.init("Access-Control-Allow-Headers")!] = "Content-Type, Authorization"
+            // Echo back whatever headers the client requests (supports OpenAI SDK's
+            // x-stainless-* headers, Obsidian Copilot, and any other client).
+            // Falls back to Content-Type, Authorization if no request headers specified.
+            let allowedHeaders = requestedHeaders ?? "Content-Type, Authorization"
+            headers[.init("Access-Control-Allow-Headers")!] = allowedHeaders
             headers[.init("Access-Control-Max-Age")!] = "86400"
         }
         return Response(status: .noContent, headers: headers)
