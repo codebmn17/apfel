@@ -296,7 +296,7 @@ Full API spec: [openai/openai-openapi](https://github.com/openai/openai-openapi)
 | Context window | **4096 tokens** (input + output combined) |
 | Platform | macOS 26+, Apple Silicon only |
 | Model | One model (`apple-foundationmodel`), not configurable |
-| Guardrails | Apple's safety system may block benign prompts |
+| Guardrails | Apple's safety system may block benign prompts (use `--permissive` to reduce false positives). See [comparison](docs/PERMISSIVE.md) |
 | Speed | On-device, not cloud-scale - a few seconds per response |
 | No embeddings / vision | Not available on-device |
 
@@ -325,7 +325,7 @@ MODEL
   --temperature <n>                       Sampling temperature (e.g., 0.7)
   --seed <n>                              Random seed for reproducibility
   --max-tokens <n>                        Maximum response tokens
-  --permissive                            Use permissive content guardrails
+  --permissive                            Relaxed guardrails (reduces false positives)
   --retry [n]                             Retry transient errors with backoff (default: 3)
   --debug                                 Enable debug logging to stderr (all modes)
 
