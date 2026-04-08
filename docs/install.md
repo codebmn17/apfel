@@ -72,6 +72,22 @@ make install
 
 `xcrun --show-sdk-version` must print `26.4` or newer.
 
+## Alternative install methods
+
+### Mint
+
+```bash
+mint install Arthur-Ficial/apfel
+```
+
+### mise
+
+```bash
+mise use -g github:Arthur-Ficial/apfel
+```
+
+Supports project-scoped installs (`mise use github:Arthur-Ficial/apfel` without `-g`). Installs directly from GitHub releases.
+
 ## Verify
 
 ```bash
