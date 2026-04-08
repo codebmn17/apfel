@@ -5,6 +5,9 @@ import PackageDescription
 let package = Package(
     name: "apfel",
     platforms: [.macOS(.v26)],
+    products: [
+        .executable(name: "apfel", targets: ["apfel"])
+    ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
     ],
