@@ -95,10 +95,9 @@ result=$(apfel -q "Capital of France? One word.")
 
 ### OpenAI-compatible server
 
-Start the server:
-
 ```bash
-apfel --serve
+apfel --serve                              # foreground
+brew services start apfel                  # background (like Ollama)
 ```
 
 Then in another terminal:
@@ -120,6 +119,14 @@ resp = client.chat.completions.create(
     messages=[{"role": "user", "content": "What is 1+1?"}],
 )
 print(resp.choices[0].message.content)
+```
+
+Run in background (auto-restarts, starts at login - [full guide](docs/background-service.md)):
+
+```bash
+brew services start apfel
+brew services stop apfel
+APFEL_TOKEN=$(uuidgen) APFEL_MCP=/path/to/tools.py brew services start apfel
 ```
 
 ### Interactive chat
@@ -507,27 +514,6 @@ HTTP Server (/v1/*) ───────┘   (100% on-device, zero network)
 
 Swift 6.3 strict concurrency. Three targets: `ApfelCore` (pure logic, unit-testable), `apfel` (CLI + server), `apfel-tests` (pure Swift runner, no XCTest). **No Xcode required.**
 
-## Background Service
-
-Run the server in the background (like Ollama):
-
-```bash
-brew services start apfel          # Start at login, auto-restart
-brew services stop apfel           # Stop
-brew services restart apfel        # Restart
-brew services info apfel           # Status
-tail -f /opt/homebrew/var/log/apfel.log  # Logs
-```
-
-Custom port or token via environment:
-
-```bash
-APFEL_PORT=8080 brew services start apfel
-APFEL_TOKEN=$(uuidgen) brew services start apfel
-APFEL_MCP=/path/to/server.py brew services start apfel
-```
-
-See [docs/background-service.md](docs/background-service.md) for details.
 
 ## Build & Test
 
