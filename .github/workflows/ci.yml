@@ -43,7 +43,7 @@ jobs:
 
           # CLI flag/help/version/file tests (no model needed)
           python3 -m pytest Tests/integration/cli_e2e_test.py \
-            -k "help or version or invalid_flag or no_color or ansi or exit_code or update or release_exits or release_in_help or release_shows_version or mcp_timeout_flag or mcp_timeout_env or file_flag_missing or file_flag_nonexistent or file_flag_image or file_flag_binary or file_flag_unknown" \
+            -k "help or version or invalid_flag or no_color or ansi or exit_code or update or release_exits or release_in_help or release_shows_version or mcp_timeout_flag_in_help or mcp_timeout_env_var_in_help or file_flag_missing or file_flag_nonexistent or file_flag_image or file_flag_binary or file_flag_unknown" \
             -v --tb=short
 
           # Benchmark structure test (no model needed)
