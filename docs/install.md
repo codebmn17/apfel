@@ -16,15 +16,15 @@ brew install apfel
 
 No build tools needed. See [brew-install.md](brew-install.md) for troubleshooting.
 
-## Option 2: Nix (nixpkgs)
+## Option 2: Nix (nixpkgs) — pending
+
+The initial nixpkgs submission ([NixOS/nixpkgs#510089](https://github.com/NixOS/nixpkgs/pull/510089)) is under upstream review and not yet merged. Once it lands:
 
 ```bash
 nix profile install nixpkgs#apfel-ai
 ```
 
-The package ships the official signed release binary, so runtime requirements are the same as Homebrew (macOS 26 Tahoe, Apple Silicon, Apple Intelligence enabled). Attribute name is `apfel-ai` because nixpkgs already has an unrelated `apfel` package (a particle-physics PDF library) - the binary on your `$PATH` is still `apfel`.
-
-See [docs/nixpkgs.md](nixpkgs.md) for update cadence, automation details, and how to test the package locally.
+Attribute name is `apfel-ai` because nixpkgs already has an unrelated `apfel` package (a particle-physics PDF library); the binary on `$PATH` is still `apfel`. See [docs/nixpkgs.md](nixpkgs.md) for automation details and tracking issue [#88](https://github.com/Arthur-Ficial/apfel/issues/88) for current status.
 
 ## Option 3: Build from source
 
