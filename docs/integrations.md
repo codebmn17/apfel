@@ -2,6 +2,8 @@
 
 Community-contributed configurations for using apfel with other tools.
 
+For **scripting language guides** (how to call apfel from Python, Node.js, Ruby, PHP, Bash, Zsh, AppleScript, Swift, Perl, AWK) see [docs/guides/index.md](guides/index.md). Every snippet there was run against a live apfel server; lab repo: [apfel-guides-lab](https://github.com/Arthur-Ficial/apfel-guides-lab).
+
 ---
 
 ## opencode

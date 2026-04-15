@@ -283,6 +283,8 @@ Full API spec: [openai/openai-openapi](https://github.com/openai/openai-openapi)
 
 ## Reference Docs
 
+Guides to use apfel from [Python](docs/guides/python.md), [Node.js](docs/guides/nodejs.md), [Ruby](docs/guides/ruby.md), [PHP](docs/guides/php.md), [Bash/curl](docs/guides/bash-curl.md), [Zsh](docs/guides/zsh.md), [AppleScript](docs/guides/applescript.md), [Swift](docs/guides/swift-scripting.md), [Perl](docs/guides/perl.md), [AWK](docs/guides/awk.md) — see [docs/guides/index.md](docs/guides/index.md). Empirically tested; runnable proof at [apfel-guides-lab](https://github.com/Arthur-Ficial/apfel-guides-lab).
+
 - [docs/install.md](docs/install.md) — install, troubleshooting, and Apple Intelligence setup
 - [docs/cli-reference.md](docs/cli-reference.md) — every flag, exit code, and environment variable
 - [docs/background-service.md](docs/background-service.md) — `brew services` and launchd usage
@@ -373,6 +375,8 @@ Everything that grows out of apfel. Each project ships as its own repo, its own 
 Built something on top of apfel? Open an issue and it can be added here.
 
 - [https://apfelclaw.yamanlabs.com/](https://apfelclaw.yamanlabs.com/), [https://github.com/julianyaman/apfelclaw](https://github.com/julianyaman/apfelclaw), by [https://github.com/julianYaman](https://github.com/julianYaman) — local AI agent that reads files, calendar, mail, and Mac status via read-only tools
+- [https://github.com/bhaskarvilles/fruit-chat](https://github.com/bhaskarvilles/fruit-chat), by [https://github.com/bhaskarvilles](https://github.com/bhaskarvilles) — "Apple Intelligence in your browser" — browser-based chat UI that talks to `apfel --serve` over the OpenAI-compatible API
+- [https://github.com/lucaspwo/local-claude](https://github.com/lucaspwo/local-claude), by [https://github.com/lucaspwo](https://github.com/lucaspwo) — Claude Code wrapper that swaps in apfel as a local backend via a small Anthropic↔OpenAI proxy; keeps cloud claude untouched
 
 ## Contributing
 
