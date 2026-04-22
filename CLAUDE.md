@@ -4,13 +4,9 @@
 
 ## The Golden Goal
 
-apfel has ONE purpose with FOUR delivery modes:
+apfel exposes Apple's on-device FoundationModels LLM. **Two things are the product. Two things are byproducts.**
 
-> **Expose Apple's on-device FoundationModels LLM as a usable, powerful UNIX tool,
-> an OpenAI API-compatible server, a working command-line chat, and a reusable
-> Swift library (`ApfelCore`) for downstream developers.**
-
-### The four modes, in priority order:
+### Core product (this is what apfel IS)
 
 1. **UNIX tool** (`apfel "prompt"`, `echo "text" | apfel`, `apfel --stream`)
    - Pipe-friendly, composable, correct exit codes
@@ -18,26 +14,42 @@ apfel has ONE purpose with FOUR delivery modes:
    - `--json` output for machine consumption
    - Respects `NO_COLOR`, `--quiet`, stdin detection
 
-2. **OpenAI-compatible HTTP server** (`apfel --serve`)
+2. **OpenAI API-compatible HTTP server** (`apfel --serve`)
    - Drop-in replacement for `openai.OpenAI(base_url="http://localhost:11434/v1")`
    - `/v1/chat/completions` (streaming + non-streaming)
    - `/v1/models`, `/health`, tool calling, `response_format`
    - Honest 501s for unsupported features (embeddings, legacy completions)
    - CORS for browser clients
 
-3. **Command-line chat** (`apfel --chat`)
-   - Interactive multi-turn with context window protection
-   - Typed error display, context rotation when approaching limit
-   - System prompt support
+These two modes are what the README.md leads with. Every design decision, test, and release gate is scored against them first.
 
-4. **Swift library** (`import ApfelCore`, first shipped in `1.1.0`)
+### Byproducts (useful, but not the pitch)
+
+3. **Interactive mini TUI chat** (`apfel --chat`) - **a byproduct for quick testing, not a main product.**
+   - Ships because the pieces are already there (Session, ContextManager, tool calling)
+   - Handy to kick the tyres on a prompt or a local MCP server without writing a client
+   - Should not dominate README real-estate; a short Quick Start entry is enough
+   - For a real chat UI, point users to `apfel-chat` (separate repo)
+
+4. **Swift library** (`import ApfelCore`, first shipped in `1.1.0`) - **a goal, but a secondary surface.**
    - Pure, FoundationModels-free Swift Package library product
    - OpenAI-compatible request/response types, validation, tool-call handling, schema parsing, MCP protocol, error classification, retry logic, context-trimming strategies
    - Downstream apps call FoundationModels themselves - apfel just supplies the types and policies
    - DocC catalog at `Sources/Core/ApfelCore.docc/`, runnable examples at `Examples/`, stability contract in [STABILITY.md](STABILITY.md)
    - API-breakage guarded in CI via `swift package diagnose-api-breaking-changes`
+   - **Must NOT be front-and-center in README.md.** One single link to [docs/swift-library.md](docs/swift-library.md) further down the page - no install snippet, no `import ApfelCore` sample, no types list. All Swift-library README content lives on dedicated docs pages.
 
 The Debug GUI has been extracted to its own repo: [apfel-gui](https://github.com/Arthur-Ficial/apfel-gui)
+
+### README.md structure rule
+
+The README.md mirrors this priority - **violating this structure is a bug.**
+
+- Hero + tagline: UNIX tool and OpenAI-compatible server only
+- "What it is" table: **two rows** (UNIX tool, OpenAI server). Nothing else.
+- Quick Start: UNIX tool first, server second, chat gets a short subsection noting it is a quick-testing byproduct
+- Swift library: **one link, one line**, in a later section (e.g. "Reference Docs" or near the `apfel tree`), pointing to [docs/swift-library.md](docs/swift-library.md). No code samples, no `Package.swift` snippets, no type catalogue in the README.
+- All Swift-library detail (install snippet, import example, API surface summary, stability contract pointers, example catalogue) lives on `docs/swift-library.md` and the DocC catalog. Not in README.md.
 
 ### Non-negotiable principles:
 

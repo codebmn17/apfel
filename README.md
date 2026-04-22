@@ -11,20 +11,20 @@
 [![Website](https://img.shields.io/badge/web-apfel.franzai.com-16A34A)](https://apfel.franzai.com)
 [![#agentswelcome](https://img.shields.io/badge/%23agentswelcome-PRs%20welcome-0066cc?style=for-the-badge&labelColor=0d1117&logo=probot&logoColor=white)](#contributing)
 
-Every Mac with Apple Silicon ships a built-in language model as part of Apple Intelligence. `apfel` gives you access to it - from the terminal, as a local OpenAI-compatible server, or as an interactive chat. No API keys, no cloud, no downloads. It's already on your machine.
+Every Mac with Apple Silicon ships a built-in language model as part of Apple Intelligence. `apfel` gives you access to it as a proper UNIX tool and as a local OpenAI-compatible server. No API keys, no cloud, no downloads. It's already on your machine.
 
 ## What It Is
 
-Every Apple Silicon Mac with Apple Intelligence includes Apple's on-device foundation model. `apfel` exposes it through [https://developer.apple.com/documentation/foundationmodels](https://developer.apple.com/documentation/foundationmodels) so you can use it directly from the shell, from OpenAI-compatible clients, and as a Swift library.
+Every Apple Silicon Mac with Apple Intelligence includes Apple's on-device foundation model. `apfel` exposes it through [https://developer.apple.com/documentation/foundationmodels](https://developer.apple.com/documentation/foundationmodels) so you can use it directly from the shell and from any OpenAI SDK.
 
 | Mode | Command | What you get |
 |------|---------|--------------|
 | UNIX tool | `apfel "prompt"` / `echo "text" \| apfel` | Pipe-friendly answers, file attachments, JSON output, exit codes |
 | OpenAI-compatible server | `apfel --serve` | Drop-in local `http://localhost:11434/v1` backend for OpenAI SDKs |
-| Command-line chat | `apfel --chat` | Multi-turn chat with context-window management |
-| Swift library | `import ApfelCore` | OpenAI types, validation, context strategies, tool calling, MCP - bring your own FoundationModels calls |
 
-Tool calling works across CLI, chat, and server. Inference stays 100% on-device. The context window is 4096 tokens.
+Tool calling works in both modes. Inference stays 100% on-device. The context window is 4096 tokens.
+
+An interactive mini chat (`apfel --chat`) also ships for quick testing - see [Quick testing chat](#quick-testing-chat) below. For a real chat UI, use [apfel-chat](https://github.com/Arthur-Ficial/apfel-chat).
 
 ![apfel CLI](screenshots/cli.png)
 
@@ -51,37 +51,6 @@ make install
 ```
 
 Update with `brew upgrade apfel` or `apfel --update`. Troubleshooting and Apple Intelligence setup notes: [docs/install.md](docs/install.md).
-
-## Swift Package
-
-`ApfelCore` is a public Swift Package library product for the pure, FoundationModels-free pieces of apfel. It is for downstream Swift developers who want the OpenAI-compatible types, validation, MCP helpers, schema parsing, retry classification, and context-strategy policies without depending on the `apfel` executable target.
-
-The first tagged release that contains `ApfelCore` is `1.1.0`. Depend on the package product directly:
-
-```swift
-dependencies: [
-    .package(url: "https://github.com/Arthur-Ficial/apfel.git", from: "1.1.0")
-],
-targets: [
-    .executableTarget(
-        name: "MyTool",
-        dependencies: [
-            .product(name: "ApfelCore", package: "apfel")
-        ]
-    )
-]
-```
-
-```swift
-import ApfelCore
-
-let request = ChatCompletionRequest(
-    model: "apple-foundationmodel",
-    messages: [OpenAIMessage(role: "user", content: .text("Hello"))]
-)
-```
-
-Library docs live in [Sources/Core/ApfelCore.docc/](Sources/Core/ApfelCore.docc/). Runnable examples live in [Examples/](Examples/).
 
 ## Quick Start
 
@@ -160,7 +129,9 @@ brew services stop apfel
 APFEL_TOKEN=$(uuidgen) APFEL_MCP=/path/to/tools.py brew services start apfel
 ```
 
-### Interactive chat
+### Quick testing chat
+
+A small interactive chat is included for kicking the tyres on a prompt or a local MCP server without writing a client. It is a byproduct of the UNIX tool and server work, not the main surface - for a real chat UI, use [apfel-chat](https://github.com/Arthur-Ficial/apfel-chat).
 
 ```bash
 apfel --chat
@@ -339,6 +310,7 @@ Guides to use apfel from [Python](docs/guides/python.md), [Node.js](docs/guides/
 - [docs/local-setup-with-vs-code.md](docs/local-setup-with-vs-code.md) - local review with apfel + a second edit/apply model in VS Code
 - [docs/demos.md](docs/demos.md) - longer walkthroughs of the shell demos
 - [docs/EXAMPLES.md](docs/EXAMPLES.md) - 50+ real prompts with unedited output
+- [docs/swift-library.md](docs/swift-library.md) - `ApfelCore` Swift Package for downstream developers
 
 ## Architecture
 
@@ -351,7 +323,7 @@ HTTP Server (/v1/*) ───────┘   (100% on-device, zero network)
                                 TokenCounter → real token counts (SDK 26.4)
 ```
 
-Swift 6.3 strict concurrency. Three targets: `ApfelCore` (pure logic, unit-testable), `apfel` (CLI + server), and `apfel-tests` (pure Swift runner, no XCTest).
+Swift 6.3 strict concurrency. Three targets: `ApfelCore` (pure logic, unit-testable, also available as a Swift Package product - see [docs/swift-library.md](docs/swift-library.md)), `apfel` (CLI + server), and `apfel-tests` (pure Swift runner, no XCTest).
 
 ## Build & Test
 
