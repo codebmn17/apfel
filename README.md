@@ -314,10 +314,26 @@ apfel --serve --permissive             # every request uses permissive guardrail
 |------------|--------|
 | Context window | **4096 tokens** (input + output combined) |
 | Platform | macOS 26+, Apple Silicon only |
-| Model | One model (`apple-foundationmodel`), not configurable |
+| Model | One model (`apple-foundationmodel`, ~3B params on-device), not configurable |
 | Guardrails | Apple's safety system may block benign prompts. `--permissive` reduces false positives ([docs/PERMISSIVE.md](docs/PERMISSIVE.md)) |
 | Speed | On-device, not cloud-scale - a few seconds per response |
 | No embeddings / vision | Not available on-device |
+| Training data / knowledge cutoff | Apple has not published a precise cutoff for the on-device model. When pushed to name one, the model **confabulates a different date each sample** (e.g. "October 2023", "April 2023"). Treat all model self-reports about its own training as unreliable. |
+| No current date or real-time awareness | The model does not know today's date and has no network/clock access. If asked, it will either refuse or invent a date. Inject the current date via system prompt when arithmetic depends on it (see workaround below). |
+
+**Workaround for date-dependent prompts** - inject the current date as a system message:
+
+```bash
+apfel -s "Today is $(date '+%B %d, %Y')." "Write a one-line release note dated today."
+```
+
+```bash
+apfel --chat -s "Today is $(date '+%B %d, %Y'). You are a helpful assistant."
+```
+
+Note: even with an injected date the 3B model can still hallucinate (especially when asked directly about its own training cutoff). The injection helps generative prompts that *use* the date; it does not override the model's self-report reflex.
+
+Background: [#158](https://github.com/Arthur-Ficial/apfel/issues/158).
 
 ## Reference Docs
 
