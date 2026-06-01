@@ -623,7 +623,7 @@ private func benchmarkRequestPipelineResult(
     request: ChatCompletionRequest,
     options: SessionOptions
 ) async throws -> (finalPrompt: String, promptTokens: Int, responseBytes: Int) {
-    let (session, finalPrompt) = try await ContextManager.makeSession(
+    let (_, finalPrompt, inputEntries) = try await ContextManager.makeSession(
         messages: request.messages,
         tools: request.tools,
         options: options,
@@ -631,7 +631,7 @@ private func benchmarkRequestPipelineResult(
         toolChoice: request.tool_choice
     )
     let promptTokens = await TokenCounter.shared.count(
-        entries: sessionInputEntries(session, finalPrompt: finalPrompt, options: options)
+        entries: sessionInputEntries(builtEntries: inputEntries, finalPrompt: finalPrompt, options: options)
     )
     let payload = ChatCompletionResponse(
         id: "chatcmpl-bench",

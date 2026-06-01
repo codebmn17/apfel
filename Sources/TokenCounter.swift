@@ -102,6 +102,15 @@ actor TokenCounter {
             switch entry {
             case .instructions(let i):
                 for seg in i.segments { if case .text(let t) = seg { total += max(1, t.content.count / 4) } }
+                // Native tool definitions are sent to the model as part of the
+                // prompt (name + description + parameter schema), so they must
+                // count toward prompt tokens. The real model.tokenCount(for:)
+                // includes them; the chars/4 fallback approximates each
+                // definition from its name and description (the parameter
+                // schema is not exposed as a readable property by the SDK).
+                for def in i.toolDefinitions {
+                    total += toolDefinitionTokens(def)
+                }
             case .prompt(let p):
                 for seg in p.segments { if case .text(let t) = seg { total += max(1, t.content.count / 4) } }
             case .response(let r):
@@ -109,11 +118,22 @@ actor TokenCounter {
             case .toolOutput(let o):
                 for seg in o.segments { if case .text(let t) = seg { total += max(1, t.content.count / 4) } }
             case .toolCalls(let tc):
-                total += tc.count * 20
+                // Fixed per-call overhead plus the serialized arguments JSON,
+                // which dominates for calls with large argument payloads.
+                for call in tc {
+                    total += 20 + max(1, call.arguments.jsonString.count / 4)
+                }
             @unknown default:
                 break
             }
         }
         return total
+    }
+
+    /// Approximate the prompt-token cost of a native tool definition from its
+    /// name and description (chars/4). The SDK does not expose the parameter
+    /// schema as a readable property, so it cannot be included here.
+    private func toolDefinitionTokens(_ def: Transcript.ToolDefinition) -> Int {
+        max(1, (def.name.count + def.description.count) / 4)
     }
 }

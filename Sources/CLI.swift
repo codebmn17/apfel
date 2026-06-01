@@ -46,7 +46,7 @@ func singlePrompt(_ prompt: String, systemPrompt: String?, stream: Bool, options
         var msgs: [OpenAIMessage] = []
         if let sys = systemPrompt { msgs.append(OpenAIMessage(role: "system", content: .text(sys))) }
         msgs.append(OpenAIMessage(role: "user", content: .text(prompt)))
-        (session, finalPrompt) = try await ContextManager.makeSession(
+        (session, finalPrompt, _) = try await ContextManager.makeSession(
             messages: msgs, tools: mcpTools, options: options, jsonMode: false, toolChoice: nil)
     } else {
         session = makeSession(systemPrompt: systemPrompt, options: options)

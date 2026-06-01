@@ -81,12 +81,17 @@ func transcriptEntries(_ transcript: Transcript) -> [Transcript.Entry] {
     Array(transcript)
 }
 
+/// Assemble the full prompt-token accounting input from the entries
+/// ContextManager actually built (which retain native tool definitions) plus
+/// the final prompt sent via respond(). Reading the entries back from
+/// `session.transcript` instead drops `Instructions.toolDefinitions`, which
+/// undercounts prompt tokens for tool-augmented requests (#176).
 func sessionInputEntries(
-    _ session: LanguageModelSession,
+    builtEntries: [Transcript.Entry],
     finalPrompt: String,
     options: SessionOptions = .defaults
 ) -> [Transcript.Entry] {
-    var entries = transcriptEntries(session.transcript)
+    var entries = builtEntries
     entries.append(makePromptEntry(finalPrompt, options: options))
     return entries
 }
@@ -367,7 +372,7 @@ func executeMCPToolCallsForServer(
         toolCalls: executed.toolCalls,
         toolResults: executed.toolLog.map { ($0.name, $0.result) }
     )
-    let (followUpSession, followUpPrompt) = try await ContextManager.makeSession(
+    let (followUpSession, followUpPrompt, _) = try await ContextManager.makeSession(
         messages: followUpMessages,
         tools: nil,
         options: sessionOptions,

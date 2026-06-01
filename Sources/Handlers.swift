@@ -94,8 +94,9 @@ func handleChatCompletion(_ request: Request, context: some RequestContext) asyn
     // Build session + extract final prompt via ContextManager (Transcript API)
     let session: LanguageModelSession
     let finalPrompt: String
+    let inputEntries: [Transcript.Entry]
     do {
-        (session, finalPrompt) = try await ContextManager.makeSession(
+        (session, finalPrompt, inputEntries) = try await ContextManager.makeSession(
             messages: chatRequest.messages,
             tools: effectiveTools,
             options: sessionOpts,
@@ -118,8 +119,10 @@ func handleChatCompletion(_ request: Request, context: some RequestContext) asyn
     events.append("context built history=\(max(0, chatRequest.messages.count - 1)) final_prompt_chars=\(finalPrompt.count)")
 
     let genOpts = makeGenerationOptions(sessionOpts)
+    // Count the entries we actually built (native tool definitions intact),
+    // not the session's transcript, which drops Instructions.toolDefinitions (#176).
     let promptTokens = await TokenCounter.shared.count(
-        entries: sessionInputEntries(session, finalPrompt: finalPrompt, options: sessionOpts)
+        entries: sessionInputEntries(builtEntries: inputEntries, finalPrompt: finalPrompt, options: sessionOpts)
     )
     let requestId = "chatcmpl-\(UUID().uuidString.prefix(12).lowercased())"
     let created = Int(Date().timeIntervalSince1970)
