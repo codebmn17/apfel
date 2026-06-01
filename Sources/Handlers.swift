@@ -581,7 +581,14 @@ private func streamingResponse(
                     responseLines?.append(finishLine.trimmingCharacters(in: .whitespacesAndNewlines))
                     continuation.yield(ByteBuffer(string: finishLine))
 
-                    completionTokens = await TokenCounter.shared.count(explanation)
+                    // Completion tokens must account for BOTH the content already
+                    // streamed before the refusal (accumulated in `prev`) and the
+                    // refusal explanation itself. Counting only `explanation` drops
+                    // the pre-refusal streamed content. The pure helper returns the
+                    // concatenation so we make a single `count()` call (avoiding
+                    // double-counting tokens at the join boundary).
+                    completionTokens = await TokenCounter.shared.count(
+                        StreamErrorResolver.refusalCompletionText(prev: prev, explanation: explanation))
                     if includeUsage {
                         let usageChunk = sseUsageChunk(
                             id: id, created: created,

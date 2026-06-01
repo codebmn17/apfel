@@ -242,14 +242,28 @@ def test_179_streaming_refusal_counts_pre_refusal_tokens():
     """#179: a refusal AFTER content has streamed must include the pre-refusal
     content in usage.completion_tokens.
 
-    Not externally triggerable: a client cannot force the model to stream
-    content and THEN refuse. The deterministic test requires extracting the
-    refusal token-accounting into a pure helper (fix-phase seam). RED until then.
+    A client cannot force the model to stream content and THEN refuse, so the
+    accounting itself is exercised deterministically in the pure-Swift unit
+    suite via StreamErrorResolver.refusalCompletionText (see
+    Tests/apfelTests/StreamErrorResolverTests.swift). The fix extracted that
+    seam and wired the streaming refusal branch in Sources/Handlers.swift to
+    count `prev + explanation` rather than `explanation` alone. This test
+    guards that wiring at the source level so the bug cannot silently regress.
     """
-    pytest.fail(
-        "#179 RED placeholder: mid-stream refusal accounting is not externally "
-        "triggerable; deterministic test needs the fix to extract a pure "
-        "completion-token helper. Tracked on issue #179.")
+    handlers = (ROOT / "Sources" / "Handlers.swift").read_text()
+    # The refusal branch must count the pre-refusal streamed content, not just
+    # the explanation. The pure helper combines both.
+    assert "refusalCompletionText(prev: prev, explanation: explanation)" in handlers, (
+        "streaming refusal must token-count the pre-refusal streamed content "
+        "(prev) plus the explanation via the pure helper")
+    assert "TokenCounter.shared.count(explanation)" not in handlers, (
+        "refusal completion tokens must NOT count the explanation alone "
+        "(that drops the already-streamed `prev` content)")
+
+    resolver = (ROOT / "Sources" / "Core" / "Chat" / "StreamOutcome.swift").read_text()
+    assert "func refusalCompletionText(prev: String, explanation: String) -> String" in resolver, (
+        "the pure completion-token helper must exist in ApfelCore so it is "
+        "unit-testable without FoundationModels")
 
 
 def test_182_streaming_retry_prints_output_once():
