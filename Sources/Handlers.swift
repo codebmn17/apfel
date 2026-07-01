@@ -226,7 +226,7 @@ func handleChatCompletion(_ request: Request, context: some RequestContext) asyn
         let result = streamingResponse(session: session, prompt: finalPrompt,
                                        id: requestId, created: created,
                                        genOpts: genOpts, promptTokens: promptTokens,
-                                       includeUsage: includeUsage,
+                                       includeUsage: includeUsage, jsonMode: jsonMode,
                                        requestBody: requestBodyString, events: events)
         return (result.response, result.trace)
     } else {
@@ -499,6 +499,7 @@ private func streamingResponse(
     genOpts: GenerationOptions,
     promptTokens: Int,
     includeUsage: Bool,
+    jsonMode: Bool,
     requestBody: String?,
     events: [String]
 ) -> (response: Response, trace: ChatRequestTrace) {
@@ -544,20 +545,40 @@ private func streamingResponse(
                 for try await snapshot in stream {
                     let content = snapshot.content
                     if content.count > prev.count {
-                        let idx = content.index(content.startIndex, offsetBy: prev.count)
-                        let delta = String(content[idx...])
-                        let chunkLine = sseDataLine(sseContentChunk(id: id, created: created, content: delta, includeUsage: includeUsage))
-                        responseLines?.append(chunkLine.trimmingCharacters(in: .whitespacesAndNewlines))
-                        continuation.yield(ByteBuffer(string: chunkLine))
-                        chunkCount += 1
-                        await eventBox.append("chunk #\(chunkCount) delta=\(delta.count) total=\(content.count)")
+                        // In json_object mode we cannot fence-strip an incremental
+                        // suffix (the closing ``` only arrives at the end), so we
+                        // buffer the whole response and emit one stripped delta
+                        // after the loop (#223), mirroring the structured path.
+                        if !jsonMode {
+                            let idx = content.index(content.startIndex, offsetBy: prev.count)
+                            let delta = String(content[idx...])
+                            let chunkLine = sseDataLine(sseContentChunk(id: id, created: created, content: delta, includeUsage: includeUsage))
+                            responseLines?.append(chunkLine.trimmingCharacters(in: .whitespacesAndNewlines))
+                            continuation.yield(ByteBuffer(string: chunkLine))
+                            chunkCount += 1
+                            await eventBox.append("chunk #\(chunkCount) delta=\(delta.count) total=\(content.count)")
+                        }
                     }
                     prev = content
                 }
 
                 // Check accumulated response for tool calls before emitting final chunk
                 let toolCalls = ToolCallHandler.detectToolCall(in: prev)
-                completionTokens = await TokenCounter.shared.count(prev)
+
+                // json_object mode delivers one fence-stripped content delta so the
+                // concatenated stream is valid JSON (#223). Skip when the buffered
+                // output is actually a tool call (handled by the branch below).
+                let deliveredContent: String
+                if jsonMode, toolCalls == nil {
+                    deliveredContent = JSONFenceStripper.strip(prev)
+                    let contentLine = sseDataLine(sseContentChunk(id: id, created: created, content: deliveredContent, includeUsage: includeUsage))
+                    responseLines?.append(contentLine.trimmingCharacters(in: .whitespacesAndNewlines))
+                    continuation.yield(ByteBuffer(string: contentLine))
+                    await eventBox.append("json_object content delta chars=\(deliveredContent.count)")
+                } else {
+                    deliveredContent = prev
+                }
+                completionTokens = await TokenCounter.shared.count(deliveredContent)
                 let resolved = FinishReasonResolver.resolve(
                     hasToolCalls: toolCalls != nil,
                     completionTokens: completionTokens,

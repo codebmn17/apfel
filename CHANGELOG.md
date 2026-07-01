@@ -9,6 +9,7 @@ and this project adheres to [https://semver.org/](https://semver.org/).
 
 ### Fixed
 
+- `stream: true` with `response_format: {"type": "json_object"}` now delivers valid JSON: the streaming path buffers the response and emits a single fence-stripped content delta (mirroring the structured-output stream), so the concatenated deltas parse directly. Previously the first delta was a ` ```json ` fence and the joined stream was invalid JSON even though the non-streaming path was already correct (#223).
 - Streaming responses with `stream_options.include_usage: true` now send an explicit `"usage": null` on every non-final chunk (matching OpenAI), instead of omitting the key; the single final chunk still carries the real usage stats. Without the opt-in no `usage` key is emitted at all (#238).
 - An invalid `tool_choice` (an unrecognized string like `"banana"` or an undecodable object) now returns `400 invalid_request_error` instead of being silently coerced to `auto`. `ToolChoice` decodes such values to a new `.invalid` case that the validator rejects (#238).
 - An unknown `x_context_strategy` value (e.g. `sliding-window` typo'd as `sliding_window`) now returns `400 invalid_request_error` listing the valid values, instead of silently falling back to `newest-first` while the caller believes their strategy is active. The sibling `x_context_max_turns`/`x_context_output_reserve` params were already strictly validated (#237).

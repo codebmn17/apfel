@@ -222,6 +222,43 @@ def test_json_mode():
     assert isinstance(parsed, dict)
 
 
+def test_streaming_json_mode_valid_json():
+    """stream=True + response_format json_object: the concatenated content
+    deltas MUST form directly-parseable JSON with no markdown fence.
+
+    Regression guard for #223: the streaming path did not fence-strip, so
+    the first delta was ```json\\n{... and the joined stream was invalid JSON
+    even though the non-streaming path (test_json_mode) was correct.
+    """
+    content = ""
+    with httpx.stream(
+        "POST",
+        "http://localhost:11434/v1/chat/completions",
+        json={
+            "model": MODEL,
+            "messages": [{"role": "user", "content": "Return a JSON object with key 'answer' and value 42."}],
+            "response_format": {"type": "json_object"},
+            "stream": True,
+        },
+        timeout=60,
+    ) as resp:
+        for line in resp.iter_lines():
+            if line.startswith("data: "):
+                data = line[6:]
+                if data.strip() == "[DONE]":
+                    break
+                chunk = json.loads(data)
+                if chunk["choices"]:
+                    delta = chunk["choices"][0]["delta"].get("content")
+                    if delta:
+                        content += delta
+
+    assert not content.strip().startswith("```"), \
+        f"streamed json_object must not contain a markdown fence; got: {content!r}"
+    parsed = json.loads(content)
+    assert isinstance(parsed, dict)
+
+
 def test_streaming_no_usage_chunk_without_opt_in():
     """Per OpenAI spec, the empty-choices usage chunk must only appear when
     `stream_options.include_usage=true`. Without opt-in, the stream goes
