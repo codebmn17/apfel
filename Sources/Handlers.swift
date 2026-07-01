@@ -16,6 +16,15 @@ struct ChatRequestTrace: Sendable {
     let requestBody: String?
     let responseBody: String?
     let events: [String]
+    /// True only when the response body is a live AsyncStream whose
+    /// onTermination handler releases the concurrency permit and the
+    /// active_requests count itself (streamingResponse /
+    /// structuredStreamingResponse). Every other response - including
+    /// buffered SSE bodies and early stream failures - must be cleaned up
+    /// by the route handler in Server.swift. Keying cleanup on `stream`
+    /// instead of this flag leaked one permit per early-failing streaming
+    /// request (#213).
+    var ownsCleanup: Bool = false
 }
 
 func capturedRequestBody(_ body: ByteBuffer, debugEnabled: Bool) -> String? {
@@ -705,7 +714,8 @@ private func streamingResponse(
             responseBody: serverState.config.debug
                 ? "Streaming response in progress. See /v1/chat/completions/stream log for final SSE transcript."
                 : nil,
-            events: events + ["stream request accepted", "final stream completion logged separately"]
+            events: events + ["stream request accepted", "final stream completion logged separately"],
+            ownsCleanup: true
         )
     )
 }
@@ -952,7 +962,8 @@ private func structuredStreamingResponse(
             responseBody: serverState.config.debug
                 ? "Streaming response in progress. See /v1/chat/completions/stream log for final SSE transcript."
                 : nil,
-            events: events + ["structured stream request accepted", "final stream completion logged separately"]
+            events: events + ["structured stream request accepted", "final stream completion logged separately"],
+            ownsCleanup: true
         )
     )
 }

@@ -143,7 +143,12 @@ func startServer(config: ServerConfig, mcpManager: MCPManager? = nil) async thro
             await serverState.logStore.requestFinished()
             throw error
         }
-        if !result.trace.stream {
+        // Release the permit + active_requests for every response that does
+        // not own its cleanup. Only live SSE AsyncStream responses set
+        // ownsCleanup (they release in onTermination); keying this on
+        // trace.stream leaked one permit per early-failing streaming
+        // request until the server was wedged (#213).
+        if !result.trace.ownsCleanup {
             await serverState.semaphore.signal()
             await serverState.logStore.requestFinished()
         }
