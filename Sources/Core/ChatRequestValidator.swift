@@ -124,6 +124,37 @@ public enum ChatRequestValidationFailure: Sendable, Equatable, Hashable, CustomS
         }
     }
 
+    /// The HTTP status code this failure maps to. An unknown model is a 404
+    /// (OpenAI parity: `model_not_found`); every other failure is a 400.
+    public var httpStatusCode: Int {
+        switch self {
+        case .invalidModel:
+            return 404
+        default:
+            return 400
+        }
+    }
+
+    /// The OpenAI `error.code` string for this failure, or `nil` when absent.
+    public var errorCode: String? {
+        switch self {
+        case .invalidModel:
+            return "model_not_found"
+        default:
+            return nil
+        }
+    }
+
+    /// The OpenAI `error.param` string for this failure, or `nil` when absent.
+    public var errorParam: String? {
+        switch self {
+        case .invalidModel:
+            return "model"
+        default:
+            return nil
+        }
+    }
+
     public var description: String { message }
 
     public var debugDescription: String { event }

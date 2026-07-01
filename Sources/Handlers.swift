@@ -83,13 +83,15 @@ func handleChatCompletion(_ request: Request, context: some RequestContext) asyn
 
     if let failure = ChatRequestValidator.validate(chatRequest) {
         return chatFailure(
-            status: .badRequest,
+            status: .init(code: failure.httpStatusCode),
             message: failure.message,
             type: "invalid_request_error",
             stream: isStreaming,
             requestBody: requestBodyString,
             events: events,
-            event: failure.event
+            event: failure.event,
+            code: failure.errorCode,
+            param: failure.errorParam
         )
     }
 
@@ -993,10 +995,12 @@ private func chatFailure(
     stream: Bool,
     requestBody: String?,
     events: [String],
-    event: String
+    event: String,
+    code: String? = nil,
+    param: String? = nil
 ) -> (response: Response, trace: ChatRequestTrace) {
     (
-        openAIError(status: status, message: message, type: type),
+        openAIError(status: status, message: message, type: type, code: code, param: param),
         ChatRequestTrace(
             stream: stream,
             estimatedTokens: nil,
@@ -1105,8 +1109,8 @@ private func refusalStreamingResponse(
 // MARK: - Error Helper
 
 /// Create an OpenAI-formatted error response (with CORS headers when enabled).
-func openAIError(status: HTTPResponse.Status, message: String, type: String, code: String? = nil) -> Response {
-    let error = OpenAIErrorResponse(error: .init(message: message, type: type, param: nil, code: code))
+func openAIError(status: HTTPResponse.Status, message: String, type: String, code: String? = nil, param: String? = nil) -> Response {
+    let error = OpenAIErrorResponse(error: .init(message: message, type: type, param: param, code: code))
     let body = jsonString(error)
     var headers = HTTPFields()
     headers[.contentType] = "application/json"

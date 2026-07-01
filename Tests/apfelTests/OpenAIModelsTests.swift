@@ -137,6 +137,22 @@ func runChatRequestValidatorTests() {
         try assertEqual(ChatRequestValidator.validate(request), .invalidModel("gpt-4o"))
     }
 
+    test("invalidModel failure maps to 404 model_not_found param model (#236)") {
+        let failure = ChatRequestValidationFailure.invalidModel("gpt-4o")
+        try assertEqual(failure.httpStatusCode, 404)
+        try assertEqual(failure.errorCode, "model_not_found")
+        try assertEqual(failure.errorParam, "model")
+    }
+
+    test("non-model failures map to 400 with nil code and param (#236)") {
+        try assertEqual(ChatRequestValidationFailure.emptyMessages.httpStatusCode, 400)
+        try assertNil(ChatRequestValidationFailure.emptyMessages.errorCode)
+        try assertNil(ChatRequestValidationFailure.emptyMessages.errorParam)
+        try assertEqual(ChatRequestValidationFailure.invalidLastRole.httpStatusCode, 400)
+        try assertNil(ChatRequestValidationFailure.invalidParameterValue("x").errorCode)
+        try assertNil(ChatRequestValidationFailure.invalidParameterValue("x").errorParam)
+    }
+
     test("validator accepts valid model name") {
         let request = try decode(
             ChatCompletionRequest.self,

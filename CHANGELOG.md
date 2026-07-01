@@ -9,6 +9,7 @@ and this project adheres to [https://semver.org/](https://semver.org/).
 
 ### Fixed
 
+- The OpenAI error object now always includes `param` and `code` (explicit `null` when absent), so router/proxy front-ends that branch on `error.code` see the key. An unknown `model` now returns `404` with `code: "model_not_found"` and `param: "model"` (OpenAI parity) instead of `400` with the keys omitted (#236).
 - `top_p` outside `[0, 1]` and `temperature` above `2` now return `400 invalid_request_error` instead of passing through to FoundationModels and surfacing as an opaque `500`. The existing `temperature < 0` check is unchanged; OpenAI caps `temperature` at 2 and requires `top_p` in `[0, 1]` (#235).
 - A `/v1/chat/completions` request body over 1 MiB now returns `413` with an OpenAI error object, CORS headers, and a request-log entry, instead of a bare `413` with `Content-Length: 0` (no error object, unreadable by browser clients, unlogged). The over-limit `collect` error is caught inside the handler and returned as a normal response so the CORS middleware and request logger both run (#234).
 - Empty or null `content` in the last (non-tool) user message of a `/v1/chat/completions` request now returns `400 invalid_request_error` ("The last message must have non-empty 'content'") instead of `500 server_error`. A missing prompt is a client-input problem, not a server fault (#233).

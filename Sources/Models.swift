@@ -154,6 +154,23 @@ struct OpenAIErrorResponse: Encodable, Sendable {
         let type: String
         let param: String?
         let code: String?
+
+        // OpenAI always emits `param` and `code` on the error object (as null
+        // when absent). Swift's synthesized Encodable omits nil optionals, so
+        // router/proxy front-ends that branch on error.code miss the key.
+        // Encode both explicitly, using null when nil (#236).
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(message, forKey: .message)
+            try c.encode(type, forKey: .type)
+            if let param = param { try c.encode(param, forKey: .param) }
+            else { try c.encodeNil(forKey: .param) }
+            if let code = code { try c.encode(code, forKey: .code) }
+            else { try c.encodeNil(forKey: .code) }
+        }
+        private enum CodingKeys: String, CodingKey {
+            case message, type, param, code
+        }
     }
 }
 

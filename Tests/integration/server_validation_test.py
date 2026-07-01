@@ -83,3 +83,26 @@ def test_temperature_above_two_returns_400():
     resp = _post(payload)
     assert resp.status_code == 400, resp.text
     _assert_openai_error(resp, expected_type="invalid_request_error")
+
+
+# ============================================================================
+# #236 - error object param/code + unknown-model 404
+# ============================================================================
+
+def test_unknown_model_returns_404_model_not_found():
+    payload = {"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}]}
+    resp = _post(payload)
+    assert resp.status_code == 404, resp.status_code
+    err = _assert_openai_error(resp)
+    assert err["code"] == "model_not_found", err
+    assert err["param"] == "model", err
+
+
+def test_error_object_always_has_null_param_and_code_when_absent():
+    """A plain validation 400 must still include explicit null param/code (#236)."""
+    payload = {"model": MODEL, "messages": []}  # empty messages -> 400
+    resp = _post(payload)
+    assert resp.status_code == 400
+    err = _assert_openai_error(resp, expected_type="invalid_request_error")
+    assert err["param"] is None, err
+    assert err["code"] is None, err
