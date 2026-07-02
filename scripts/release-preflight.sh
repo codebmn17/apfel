@@ -125,6 +125,34 @@ else
     fi
 fi
 
+# --- 6b. CHANGELOG [Unreleased] discipline ---
+# If there are commits since the last tag, the [Unreleased] section must have
+# content - otherwise `make release` stamps a version under a blank heading
+# (this happened for v1.6.1). Docs/test/CI-only commits are fine; the gate only
+# fires when work has landed but nobody wrote a changelog entry. See #263.
+step "CHANGELOG [Unreleased]"
+last_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+if [ -z "$last_tag" ]; then
+    echo "(no version tags yet - skipping [Unreleased] content gate)"
+elif [ "$(git rev-list "$last_tag"..HEAD --count)" -eq 0 ]; then
+    pass "no commits since $last_tag - nothing to changelog"
+else
+    unreleased_content=$(awk '
+      /^## \[Unreleased\]/ { insection = 1; next }
+      insection && /^## / { exit }
+      insection {
+        if ($0 ~ /^[[:space:]]*$/) next
+        if ($0 ~ /^### /) next
+        print
+      }
+    ' CHANGELOG.md)
+    if [ -n "$unreleased_content" ]; then
+        pass "[Unreleased] has entries (commits since $last_tag)"
+    else
+        fail "$(git rev-list "$last_tag"..HEAD --count) commits since $last_tag but CHANGELOG.md [Unreleased] is empty - add an Added/Fixed/Changed entry (#263)"
+    fi
+fi
+
 # --- 7. Required files exist ---
 step "Policy files"
 for f in SECURITY.md STABILITY.md LICENSE; do
