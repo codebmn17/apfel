@@ -95,7 +95,18 @@ jobs:
         run: |
           baseline=$(git describe --tags --abbrev=0)
           if git show "${baseline}:Package.swift" | grep -Fq '.library(name: "ApfelCore"'; then
-            swift package diagnose-api-breaking-changes "$baseline" --products ApfelCore
+            # Public ApfelCore enums are non-frozen: new cases are allowed in
+            # minor releases (STABILITY.md "Enum evolution"). Fail only on
+            # genuine breakage (removals, signature/type changes).
+            out=$(swift package diagnose-api-breaking-changes "$baseline" --products ApfelCore 2>&1) || true
+            echo "$out"
+            real=$(echo "$out" | grep -F '💔' | grep -v 'has been added as a new enum case' || true)
+            if [[ -n "$real" ]]; then
+              echo "::error::Non-additive ApfelCore API breakage detected:"
+              echo "$real"
+              exit 1
+            fi
+            echo "No non-additive API breakage."
           else
             echo "Skipping API breakage check: ${baseline} predates the ApfelCore product."
           fi

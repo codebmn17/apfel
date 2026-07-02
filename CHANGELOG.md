@@ -9,6 +9,7 @@ and this project adheres to [https://semver.org/](https://semver.org/).
 
 ### Changed
 
+- STABILITY.md now documents enum evolution for the ApfelCore library: public enums are non-frozen and may gain new cases in minor releases (always switch with a `default` branch); removals and signature changes remain major. The CI API-breakage gate enforces exactly this split instead of failing on every added case.
 - The tool-schema conversion cache (`SchemaConversionCache`) is now a bounded LRU: when full it evicts only the single least-recently-used entry instead of wiping all 64. Previously the 65th distinct tool set flushed the entire cache, so two alternating clients each with more than 32 distinct tool sets caused pathological full-cache churn. Backed by a new pure `LRUCache` in ApfelCore with unit coverage of eviction and the hot-entry-survives property (#247).
 
 ### Fixed

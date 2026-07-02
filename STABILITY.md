@@ -33,6 +33,10 @@ apfel follows semantic versioning:
 
 `ApfelCore` follows the same version numbers as apfel itself. There is no separate library version line.
 
+### Enum evolution
+
+Public `ApfelCore` enums are non-frozen: new cases may be added in MINOR releases (for example, a new validation-failure or error case). Do not switch over them exhaustively - always include a `default` branch. Removing or changing an existing case remains a MAJOR change. CI enforces exactly this split: the API-breakage gate fails on removals and signature changes but permits added enum cases.
+
 ## Deprecation Policy
 
 - Public `ApfelCore` APIs deprecate before removal.
