@@ -1213,6 +1213,9 @@ def test_mcp_timeout_env_var_in_help():
         f"APFEL_MCP_TIMEOUT not in help: {result.stdout[:500]}"
 
 
+@pytest.mark.model  # needs an available model: the availability gate
+# (exit 5, #222) fires before MCP init on ineligible hardware, so the
+# MCP timeout path is unreachable on GitHub runners.
 def test_mcp_timeout_short_causes_fast_failure():
     """--mcp-timeout 1 with a slow MCP server should fail within ~2 seconds."""
     slow_server = str(ROOT / "Tests" / "integration" / "fixtures" / "slow_startup_mcp_server.py")
@@ -1228,6 +1231,9 @@ def test_mcp_timeout_short_causes_fast_failure():
     assert elapsed < 5, f"Timeout took {elapsed:.1f}s, expected <5s with --mcp-timeout 1"
 
 
+@pytest.mark.model  # needs an available model: the availability gate
+# (exit 5, #222) fires before MCP init on ineligible hardware, so the
+# MCP timeout path is unreachable on GitHub runners.
 def test_mcp_timeout_env_var_works():
     """APFEL_MCP_TIMEOUT=1 should timeout same as --mcp-timeout 1."""
     slow_server = str(ROOT / "Tests" / "integration" / "fixtures" / "slow_startup_mcp_server.py")
