@@ -490,6 +490,16 @@ func performUpdate() {
 
     let installMethod = detectInstallMethod(binaryPath: resolved)
 
+    // Derive the Homebrew prefix from the resolved binary path instead of
+    // hardcoding /opt/homebrew, so a non-default prefix (Intel /usr/local, a
+    // custom ~/homebrew, etc.) works. Fall back to a PATH lookup of brew (#260).
+    let brewExec = homebrewPrefix(fromBinaryPath: resolved).map { "\($0)/bin/brew" }
+        ?? findExecutableInPath("brew")
+        ?? "brew"
+    let apfelExec = homebrewPrefix(fromBinaryPath: resolved).map { "\($0)/bin/apfel" }
+        ?? findExecutableInPath("apfel")
+        ?? resolved
+
     switch installMethod {
     case .homebrew:
         print("\(appName) v\(current) (installed via Homebrew)")
@@ -505,7 +515,7 @@ func performUpdate() {
     }
 
     // Check for updates via brew
-    let outdatedJSON = shellOutput("/opt/homebrew/bin/brew", args: ["info", "--json=v2", "apfel"])
+    let outdatedJSON = shellOutput(brewExec, args: ["info", "--json=v2", "apfel"])
     guard let data = outdatedJSON.data(using: .utf8),
           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let formulae = json["formulae"] as? [[String: Any]],
@@ -539,13 +549,26 @@ func performUpdate() {
     }
 
     print(styled("Running: brew upgrade apfel", .dim))
-    let result = shellPassthrough("/opt/homebrew/bin/brew", args: ["upgrade", "apfel"])
+    let result = shellPassthrough(brewExec, args: ["upgrade", "apfel"])
     if result == 0 {
-        let newVersion = shellOutput("/opt/homebrew/bin/apfel", args: ["--version"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let newVersion = shellOutput(apfelExec, args: ["--version"]).trimmingCharacters(in: .whitespacesAndNewlines)
         print(styled("Updated to \(newVersion)", .green))
     } else {
         printError("brew upgrade failed (exit \(result)). Try manually: brew upgrade apfel")
     }
+}
+
+/// Locate an executable by scanning `PATH`. Returns the first absolute path
+/// that exists and is executable, or nil. Used as a fallback for `brew`/`apfel`
+/// when the binary path is not a recognizable Homebrew layout (#260).
+private func findExecutableInPath(_ name: String) -> String? {
+    guard let pathVar = ProcessInfo.processInfo.environment["PATH"] else { return nil }
+    let fm = FileManager.default
+    for dir in pathVar.split(separator: ":", omittingEmptySubsequences: true) {
+        let candidate = "\(dir)/\(name)"
+        if fm.isExecutableFile(atPath: candidate) { return candidate }
+    }
+    return nil
 }
 
 /// Run a command and capture stdout.
