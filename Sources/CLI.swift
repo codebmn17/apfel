@@ -111,6 +111,73 @@ func structuredSinglePrompt(
     }
 }
 
+// MARK: - One-Shot Multi-Turn (#363)
+
+/// Handle `--messages`: a whole OpenAI-style conversation in, the next
+/// assistant message out. Reuses the server's transcript building
+/// (`ContextManager.makeSession`) so CLI and server multi-turn semantics
+/// cannot drift. Composes with `--stream` (delta printing) and `--schema`
+/// (schema-guaranteed reply to the conversation).
+func messagesPrompt(
+    messagesJSON: String,
+    systemPrompt: String?,
+    stream: Bool,
+    schemaJSON: String?,
+    schemaName: String?,
+    options: SessionOptions = .defaults,
+    mcpManager: MCPManager? = nil
+) async throws {
+    var messages = try MessagesInput.decode(messagesJSON)
+    if let sys = systemPrompt {
+        messages.insert(OpenAIMessage(role: "system", content: .text(sys)), at: 0)
+    }
+    let mcpTools = await mcpManager?.allTools() ?? []
+    let hasMCPTools = !mcpTools.isEmpty
+    debugLog("messages", "count=\(messages.count) stream=\(stream) mcp=\(hasMCPTools) schema=\(schemaJSON != nil)")
+
+    let (session, finalPrompt, _) = try await ContextManager.makeSession(
+        messages: messages, tools: mcpTools, options: options, jsonMode: false, toolChoice: nil)
+    let genOpts = makeGenerationOptions(options)
+
+    if let schemaJSON {
+        let schema = try SchemaConverter.generationSchema(fromJSON: schemaJSON, name: schemaName ?? "schema")
+        let retryMax = options.retryEnabled ? options.retryCount : 0
+        let content = try await withRetry(maxRetries: retryMax) {
+            try await session.respond(to: finalPrompt, schema: schema, options: genOpts).content.jsonString
+        }
+        switch outputFormat {
+        case .plain:
+            print(content)
+        case .json:
+            let obj = ApfelResponse(
+                model: modelName, content: content,
+                metadata: .init(onDevice: true, version: version))
+            print(jsonString(obj))
+        }
+        return
+    }
+
+    let result = try await processPrompt(
+        prompt: finalPrompt, systemPrompt: systemPrompt, session: session,
+        options: options, genOpts: genOpts, stream: stream,
+        printDelta: outputFormat == .plain, mcpManager: mcpManager, hasMCPTools: hasMCPTools)
+    printToolLog(result.toolLog)
+
+    switch outputFormat {
+    case .plain:
+        if hasMCPTools || !stream { print(result.content) } else { print() }
+    case .json:
+        let obj = ApfelResponse(
+            model: modelName, content: result.content,
+            metadata: .init(onDevice: true, version: version))
+        print(jsonString(obj))
+    }
+
+    if result.finishReason == .length {
+        printStderr("\(styledErr("apfel:", .yellow)) response truncated at the context window (finish_reason=length). Pass --max-tokens to control the cap explicitly.")
+    }
+}
+
 // MARK: - Token Budget Preflight
 
 /// Count tokens for a prompt without calling the model (`--count-tokens`).
@@ -698,6 +765,7 @@ func printUsage(to handle: FileHandle = .standardOutput) {
       -s, --system <text>       Set a system prompt
           --system-file <path>  Read system prompt from file
           --schema <path>       Constrain output to a JSON Schema file (guaranteed valid JSON)
+          --messages <path|->   One-shot multi-turn: OpenAI messages JSON from file or stdin
       -o, --output <format>     Output format: plain, json [default: plain]
       -q, --quiet               Suppress non-essential output
           --no-color             Disable colored output

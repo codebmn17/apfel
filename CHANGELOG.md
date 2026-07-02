@@ -9,6 +9,7 @@ and this project adheres to [https://semver.org/](https://semver.org/).
 
 ### Added
 
+- `--messages <file|->`: one-shot multi-turn on the UNIX tool surface. Pass an OpenAI-style conversation (a bare JSON message array or an object with a `messages` key, from a file or piped stdin via `-`) and apfel prints the next assistant message - multi-turn agents in pure shell with `jq`, no server process, no TUI. Reuses the server's transcript building (`ContextManager.makeSession`) so CLI and server multi-turn semantics cannot drift, including the last-message-must-be-user-or-tool rule and context-strategy trimming. Composes with `--stream` and `--schema`; positional prompts, `-f`, and `--chat` combinations are usage errors (exit 2) (#363).
 - `--schema <file>`: guaranteed structured output on the UNIX tool surface. The single-shot CLI now accepts a JSON Schema file and constrains generation with FoundationModels guided generation (the same `DynamicGenerationSchema` path the server's `response_format: json_schema` uses since #167), so stdout is always one schema-valid JSON object - no fence stripping, no invalid-JSON retries, jq-ready. Malformed or unsupported schemas fail at argument-parse time with exit 2; `--chat`, `--stream`, `--count-tokens`, and MCP combinations are rejected as usage errors; `-o json` wraps the object as a string in the standard envelope (#361).
 
 ## [1.7.2] - 2026-07-02

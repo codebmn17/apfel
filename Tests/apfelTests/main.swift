@@ -123,6 +123,7 @@ suite("AsyncSemaphoreTests") { runAsyncSemaphoreTests() }
 suite("ChatHistoryTests") { runChatHistoryTests() }
 suite("CompletionsTests") { runCompletionsTests() }
 suite("SchemaFlagTests") { runSchemaFlagTests() }
+suite("MessagesFlagTests") { runMessagesFlagTests() }
 
 // MARK: - Summary
 

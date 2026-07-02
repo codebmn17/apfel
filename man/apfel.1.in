@@ -112,6 +112,34 @@ from stdin. A malformed or unsupported schema is a usage error (exit 2).
 Supported schema subset: object, string (with enum), integer, number,
 boolean, and array.
 .TP
+.BI \-\-messages " path"
+One-shot multi-turn: read an OpenAI-style conversation (a JSON array of
+message objects, or an object with a
+.B messages
+key) from
+.I path
+and print the next assistant message. Pass
+.B \-
+to read the conversation from piped stdin. Roles
+.BR system ,
+.BR user ,
+.BR assistant ,
+and
+.B tool
+are honored; the last message must be a
+.B user
+or
+.B tool
+turn (same rule as the HTTP server). Composes with
+.B \-\-stream
+and
+.BR \-\-schema ;
+cannot be combined with a positional prompt,
+.BR \-f ,
+or
+.BR \-\-chat .
+A malformed conversation is a usage error (exit 2).
+.TP
 .BR \-o ", " \-\-output " " \fIformat\fR
 Output format.
 .I format

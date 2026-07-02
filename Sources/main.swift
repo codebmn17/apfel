@@ -156,8 +156,27 @@ var prompt = parsed.prompt
 var fileContents = parsed.fileContents
 var pipedContent: String? = nil
 
+// One-shot multi-turn (#363): resolve the conversation JSON. `--messages -`
+// consumes piped stdin as the conversation, so the prompt-stdin block below
+// is skipped for every --messages invocation.
+var messagesJSON = parsed.messagesJSON
+if parsed.messagesFromStdin {
+    guard isatty(STDIN_FILENO) == 0 else {
+        printError("--messages - requires a piped JSON conversation on stdin")
+        exit(exitUsageError)
+    }
+    let raw = String(data: readStdinData(), encoding: .utf8) ?? ""
+    do {
+        _ = try MessagesInput.decode(raw)
+    } catch let e as MessagesInput.Error {
+        printError("invalid --messages JSON from stdin: \(e.message)")
+        exit(exitUsageError)
+    }
+    messagesJSON = raw
+}
+
 // Read stdin when piped (single/stream/count-tokens) -- as the prompt (no args) or prepended to the prompt.
-if parsed.mode.acceptsStdinInput && isatty(STDIN_FILENO) == 0 {
+if messagesJSON == nil && parsed.mode.acceptsStdinInput && isatty(STDIN_FILENO) == 0 {
     let stdinContent: String
     do {
         stdinContent = try stdinPromptText(readStdinData())
@@ -232,7 +251,7 @@ let serverAllowedOrigins: [String] = {
 // gate, so "nothing to do" is a usage error (exit 2) regardless of whether the
 // model is available. This preserves the old bare-pipe behavior: an empty pipe
 // with no args prints the hint above and exits 2 without touching the model.
-if (parsed.mode == .single || parsed.mode == .stream) && prompt.isEmpty {
+if (parsed.mode == .single || parsed.mode == .stream) && prompt.isEmpty && messagesJSON == nil {
     printError("no prompt provided")
     exit(exitUsageError)
 }
@@ -314,20 +333,33 @@ do {
         try await chat(systemPrompt: parsed.systemPrompt, options: sessionOpts, mcpManager: mcpManager, contextStatus: parsed.contextStatus)
 
     case .stream:
-        guard !prompt.isEmpty else {
-            printError("no prompt provided")
-            await shutdownMCP()
-            exit(exitUsageError)
+        if let messagesJSON {
+            // --messages --stream: stream the next assistant turn (#363).
+            try await messagesPrompt(
+                messagesJSON: messagesJSON, systemPrompt: parsed.systemPrompt,
+                stream: true, schemaJSON: parsed.schemaJSON, schemaName: parsed.schemaName,
+                options: sessionOpts, mcpManager: mcpManager)
+        } else {
+            guard !prompt.isEmpty else {
+                printError("no prompt provided")
+                await shutdownMCP()
+                exit(exitUsageError)
+            }
+            try await singlePrompt(prompt, systemPrompt: parsed.systemPrompt, stream: true, options: sessionOpts, mcpManager: mcpManager)
         }
-        try await singlePrompt(prompt, systemPrompt: parsed.systemPrompt, stream: true, options: sessionOpts, mcpManager: mcpManager)
 
     case .single:
-        guard !prompt.isEmpty else {
+        if let messagesJSON {
+            // --messages: one-shot multi-turn (#363); composes with --schema.
+            try await messagesPrompt(
+                messagesJSON: messagesJSON, systemPrompt: parsed.systemPrompt,
+                stream: false, schemaJSON: parsed.schemaJSON, schemaName: parsed.schemaName,
+                options: sessionOpts, mcpManager: mcpManager)
+        } else if prompt.isEmpty {
             printError("no prompt provided")
             await shutdownMCP()
             exit(exitUsageError)
-        }
-        if let schemaJSON = parsed.schemaJSON {
+        } else if let schemaJSON = parsed.schemaJSON {
             // --schema: schema-guaranteed structured output (#361). Validated
             // at parse time; MCP/stream/chat combinations are rejected there.
             try await structuredSinglePrompt(

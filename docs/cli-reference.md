@@ -20,6 +20,7 @@ INPUT
   apfel --mcp <path|url> <prompt>         Attach local or remote MCP tool server (repeatable)
   apfel --mcp-token <token> <prompt>      Bearer token for remote MCP servers
   apfel --mcp-timeout <n> <prompt>        MCP timeout in seconds [default: 5]
+  apfel --messages <path|->               One-shot multi-turn from OpenAI messages JSON (file or stdin)
 
 OUTPUT
   -o, --output <fmt>                      Output format: plain, json
@@ -85,6 +86,10 @@ apfel --system-file persona.txt "Introduce yourself"
 # --schema - guaranteed schema-valid JSON output (single-prompt mode only)
 apfel --schema person.schema.json "Extract the person: Alice is 30 years old."
 apfel --schema invoice.schema.json -f invoice.txt "Extract the invoice data" | jq .total
+
+# --messages - one-shot multi-turn: conversation JSON in, next assistant turn out
+apfel --messages conversation.json
+jq '. += [{"role":"user","content":"and in German?"}]' conv.json | apfel --messages -
 
 # --mcp, --mcp-token, --mcp-timeout
 apfel --mcp ./mcp/calculator/server.py "What is 15 times 27?"

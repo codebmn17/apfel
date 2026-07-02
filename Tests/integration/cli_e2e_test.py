@@ -1417,3 +1417,99 @@ def test_schema_piped_stdin_prompt(tmp_path):
     assert result.returncode == 0, f"stderr: {result.stderr}"
     payload = json.loads(result.stdout)
     assert isinstance(payload.get("age"), int), payload
+
+
+# ============================================================================
+# --messages: one-shot multi-turn from OpenAI messages JSON (#363)
+# ============================================================================
+
+NAME_CONVERSATION = json.dumps([
+    {"role": "user", "content": "My name is Zorbulax and I live in Vienna."},
+    {"role": "assistant", "content": "Nice to meet you, Zorbulax!"},
+    {"role": "user", "content": "What is my name? Reply with just the name."},
+])
+
+
+def test_messages_malformed_file_exits_2(tmp_path):
+    bad = tmp_path / "conv.json"
+    bad.write_text("{not json")
+    result = run_cli(["--messages", str(bad)], timeout=30)
+    assert result.returncode == 2, f"expected exit 2, got {result.returncode}: {result.stderr}"
+    assert "--messages" in result.stderr
+
+
+def test_messages_trailing_assistant_exits_2(tmp_path):
+    conv = tmp_path / "conv.json"
+    conv.write_text('[{"role":"user","content":"x"},{"role":"assistant","content":"y"}]')
+    result = run_cli(["--messages", str(conv)], timeout=30)
+    assert result.returncode == 2, f"expected exit 2, got {result.returncode}: {result.stderr}"
+    assert "assistant" in result.stderr
+
+
+def test_messages_with_positional_prompt_exits_2(tmp_path):
+    conv = tmp_path / "conv.json"
+    conv.write_text(NAME_CONVERSATION)
+    result = run_cli(["--messages", str(conv), "extra prompt"], timeout=30)
+    assert result.returncode == 2, f"expected exit 2, got {result.returncode}: {result.stderr}"
+    assert "--messages" in result.stderr
+
+
+def test_messages_with_chat_exits_2(tmp_path):
+    conv = tmp_path / "conv.json"
+    conv.write_text(NAME_CONVERSATION)
+    result = run_cli(["--messages", str(conv), "--chat"], timeout=30)
+    assert result.returncode == 2, f"expected exit 2, got {result.returncode}: {result.stderr}"
+    assert "--messages" in result.stderr and "--chat" in result.stderr
+
+
+def test_messages_stdin_empty_exits_2():
+    result = run_cli(["--messages", "-"], input_text="", timeout=30)
+    assert result.returncode == 2, f"expected exit 2, got {result.returncode}: {result.stderr}"
+    assert "--messages" in result.stderr
+
+
+def test_messages_listed_in_help():
+    result = run_cli(["--help"], timeout=20)
+    assert result.returncode == 0
+    assert "--messages" in result.stdout
+
+
+@pytest.mark.model
+def test_messages_two_turn_conversation_threads_context(tmp_path):
+    require_model()
+    conv = tmp_path / "conv.json"
+    conv.write_text(NAME_CONVERSATION)
+    result = run_cli(["--messages", str(conv)], timeout=120)
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert "zorbulax" in result.stdout.lower(), result.stdout
+
+
+@pytest.mark.model
+def test_messages_from_stdin_pipe(tmp_path):
+    require_model()
+    result = run_cli(["--messages", "-"], input_text=NAME_CONVERSATION, timeout=120)
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert "zorbulax" in result.stdout.lower(), result.stdout
+
+
+@pytest.mark.model
+def test_messages_composes_with_schema(tmp_path):
+    require_model()
+    conv = tmp_path / "conv.json"
+    conv.write_text(NAME_CONVERSATION)
+    schema = tmp_path / "answer.schema.json"
+    schema.write_text('{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}')
+    result = run_cli(["--messages", str(conv), "--schema", str(schema)], timeout=120)
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    payload = json.loads(result.stdout)
+    assert "zorbulax" in payload["name"].lower(), payload
+
+
+@pytest.mark.model
+def test_messages_composes_with_stream(tmp_path):
+    require_model()
+    conv = tmp_path / "conv.json"
+    conv.write_text(NAME_CONVERSATION)
+    result = run_cli(["--messages", str(conv), "--stream"], timeout=120)
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert "zorbulax" in result.stdout.lower(), result.stdout

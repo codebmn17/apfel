@@ -79,6 +79,15 @@ public struct CLIArguments: Sendable, Equatable {
     /// filename stem (see `schemaName(fromPath:)`).
     public var schemaName: String? = nil
 
+    /// Raw conversation JSON from `--messages <file>` (#363). Validated at
+    /// parse time via `MessagesInput` so a malformed conversation is a usage
+    /// error (exit 2). nil => normal positional/stdin prompt.
+    public var messagesJSON: String? = nil
+
+    /// True for `--messages -`: the executable reads the conversation JSON
+    /// from piped stdin (validated there, same exit-2 semantics).
+    public var messagesFromStdin: Bool = false
+
     // MARK: - Output
 
     public var outputFormat: OutputFormat? = nil
@@ -153,7 +162,7 @@ public struct CLIArguments: Sendable, Equatable {
         "--context-strategy", "--context-max-turns", "--context-output-reserve",
         "--context-status",
         "-f", "--file",
-        "--schema",
+        "--schema", "--messages",
     ]
 
     /// Derive the generation-schema root name from a `--schema` file path:
@@ -238,12 +247,26 @@ extension CLIArguments {
         }
         if schemaJSON != nil {
             // Guaranteed structured output is a single-prompt feature (#361):
-            // one prompt in, one schema-valid JSON object out.
+            // one prompt in, one schema-valid JSON object out. --messages is
+            // the one composition: schema-constrained reply to a conversation.
             if mode != .single {
                 throw CLIParseError("--schema requires a single one-shot prompt; cannot combine with --\(mode.rawValue)")
             }
             if !mcpServerPaths.isEmpty {
                 throw CLIParseError("--schema cannot be combined with MCP tool calling (--mcp / APFEL_MCP)")
+            }
+        }
+        if messagesJSON != nil || messagesFromStdin {
+            // One-shot multi-turn (#363): the conversation JSON is the whole
+            // input. Only single and stream modes make sense.
+            if mode != .single && mode != .stream {
+                throw CLIParseError("--messages cannot be combined with --\(mode.rawValue)")
+            }
+            if !prompt.isEmpty {
+                throw CLIParseError("--messages replaces the positional prompt; append the final user turn to the conversation JSON instead")
+            }
+            if !fileContents.isEmpty || !fileAttachments.isEmpty {
+                throw CLIParseError("--messages cannot be combined with -f/--file; inline file content into the conversation JSON")
             }
         }
         // Future cross-flag checks live here.
@@ -478,6 +501,33 @@ extension CLIArguments {
                 }
                 result.schemaJSON = schemaText
                 result.schemaName = name
+
+            // -- One-shot multi-turn (#363) --
+
+            case "--messages":
+                i += 1
+                guard i < args.count else { throw CLIErrors.requires("--messages", "a JSON file path or -") }
+                let messagesPath = args[i]
+                if messagesPath == "-" {
+                    // Conversation JSON arrives on stdin; the executable reads
+                    // and validates it (parse() must stay free of I/O).
+                    result.messagesFromStdin = true
+                } else {
+                    let messagesText: String
+                    do {
+                        messagesText = try readFile(messagesPath)
+                    } catch let e as CLIParseError {
+                        throw e
+                    } catch {
+                        throw CLIParseError(fileErrorMessage(path: messagesPath))
+                    }
+                    do {
+                        _ = try MessagesInput.decode(messagesText)
+                    } catch let e as MessagesInput.Error {
+                        throw CLIParseError("invalid --messages JSON in \(messagesPath): \(e.message)")
+                    }
+                    result.messagesJSON = messagesText
+                }
 
             // -- Output --
 

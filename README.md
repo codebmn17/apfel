@@ -87,6 +87,9 @@ apfel -o json "Translate to German: hello" | jq .content
 # Guaranteed schema-valid JSON output (guided generation)
 apfel --schema person.schema.json "Extract the person: Alice is 30." | jq .name
 
+# One-shot multi-turn: conversation JSON in, next assistant turn out
+jq '. += [{"role":"user","content":"and in German?"}]' conv.json | apfel --messages -
+
 # Preflight token budget before a large prompt
 apfel --count-tokens -f README.md "Summarize this"
 
