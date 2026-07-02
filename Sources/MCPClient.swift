@@ -7,6 +7,10 @@ import Foundation
 import Darwin
 import ApfelCore
 
+/// Grace period after SIGTERM before escalating to SIGKILL when reaping a local
+/// MCP child (#216).
+private let mcpShutdownGraceSeconds: TimeInterval = 2.0
+
 /// A connection to a single MCP server process (stdio transport).
 final class MCPConnection: @unchecked Sendable {
     private let timeoutMilliseconds: Int
@@ -77,19 +81,13 @@ final class MCPConnection: @unchecked Sendable {
     }
 
     func callTool(name: String, arguments: String) throws -> String {
-        let resp: String
-        do {
-            resp = try sendAndReceive(
-                MCPProtocol.toolsCallRequest(id: allocId(), name: name, arguments: arguments),
-                timeoutMilliseconds: timeoutMilliseconds,
-                operationDescription: "tool '\(name)'"
-            )
-        } catch {
-            if case .timedOut = error as? MCPError {
-                shutdown()
-            }
-            throw error
-        }
+        // On timeout the manager deregisters and reaps this connection (#216);
+        // callTool just surfaces the error.
+        let resp = try sendAndReceive(
+            MCPProtocol.toolsCallRequest(id: allocId(), name: name, arguments: arguments),
+            timeoutMilliseconds: timeoutMilliseconds,
+            operationDescription: "tool '\(name)'"
+        )
         let result = try MCPProtocol.parseToolCallResponse(resp)
         if result.isError {
             throw MCPError.serverError("Tool '\(name)' failed: \(result.text)")
@@ -97,8 +95,24 @@ final class MCPConnection: @unchecked Sendable {
         return result.text
     }
 
+    /// Terminate the child and reap it so it never lingers as a zombie (#216).
+    /// SIGTERM first, then SIGKILL after a bounded grace period for a child that
+    /// ignores SIGTERM, then a blocking waitUntilExit() to collect the exit
+    /// status. Idempotent: safe to call on an already-exited process.
     func shutdown() {
-        process.terminate()
+        guard process.isRunning else {
+            process.waitUntilExit()
+            return
+        }
+        process.terminate() // SIGTERM
+        let deadline = Date().addingTimeInterval(mcpShutdownGraceSeconds)
+        while process.isRunning && Date() < deadline {
+            usleep(20_000) // 20 ms
+        }
+        if process.isRunning {
+            kill(process.processIdentifier, SIGKILL) // escalate
+        }
+        process.waitUntilExit() // reap - no zombie
     }
 
     deinit {
@@ -354,7 +368,30 @@ actor MCPManager {
         guard let conn = toolMap[name] else {
             throw MCPError.toolNotFound("No MCP server provides tool '\(name)'")
         }
-        return try await conn.callTool(name: name, arguments: arguments)
+        do {
+            return try await conn.callTool(name: name, arguments: arguments)
+        } catch {
+            // A timed-out connection is dead. Deregister it so its tools stop
+            // being offered via allTools() and later calls fail fast with
+            // toolNotFound instead of routing to the dead connection, and reap
+            // its child. Without this the tool stayed permanently registered but
+            // broken. (#216)
+            if case .timedOut = error as? MCPError {
+                deregister(conn)
+            }
+            throw error
+        }
+    }
+
+    /// Remove a dead connection from the routing tables and reap its child.
+    private func deregister(_ conn: AnyMCPConnection) {
+        let id = conn.identifier
+        connections.removeAll { $0.identifier == id }
+        let deadToolNames = toolMap.filter { $0.value.identifier == id }.map(\.key)
+        for name in deadToolNames {
+            toolMap.removeValue(forKey: name)
+        }
+        conn.shutdown()
     }
 
     func shutdown() {

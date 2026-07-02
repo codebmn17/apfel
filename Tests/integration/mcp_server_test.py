@@ -409,6 +409,48 @@ def test_mcp_crashed_server_does_not_kill_apfel():
         assert health.json()["model_available"] is True
 
 
+def test_mcp_timed_out_connection_is_deregistered():
+    """A timed-out MCP connection must be deregistered, not left permanently dead (#216).
+
+    hanging_mcp_server.py sleeps forever on tools/call. The first call times out
+    (~5s) and apfel tears the connection down. Before the fix the tool stayed in
+    the routing tables, so a second call routed to the dead connection and failed
+    with "MCP server process is not running". After the fix the connection is
+    deregistered: the tool is removed from allTools(), the model is no longer
+    offered it, and the second call succeeds (200) instead of hitting the corpse.
+    """
+    with running_custom_mcp_server(FIXTURES / "hanging_mcp_server.py") as api_url:
+        base_url = api_url.rsplit("/", 1)[0]
+        first = httpx.post(f"{api_url}/chat/completions", json={
+            "model": MODEL,
+            "messages": [
+                {"role": "user", "content": "Use the multiply tool to compute 247 times 83. Reply with just the number."}
+            ],
+            "seed": 42,
+            "max_tokens": 128,
+        }, timeout=30)
+        assert first.status_code == 500
+        assert "timed out" in first.json()["error"]["message"].lower()
+
+        # Server stays healthy after the teardown.
+        assert httpx.get(f"{base_url}/health", timeout=5).status_code == 200
+
+        # Second call must NOT route to the dead connection. Deregistration
+        # removed the tool, so the model answers directly (247*83 = 20501).
+        second = httpx.post(f"{api_url}/chat/completions", json={
+            "model": MODEL,
+            "messages": [
+                {"role": "user", "content": "Use the multiply tool to compute 247 times 83. Reply with just the number."}
+            ],
+            "seed": 42,
+            "max_tokens": 128,
+        }, timeout=30)
+        assert second.status_code == 200, \
+            f"Second call did not succeed - dead tool still registered? {second.status_code}: {second.text[:200]}"
+        assert "not running" not in second.text.lower(), \
+            f"Second call routed to the deregistered dead connection: {second.text[:200]}"
+
+
 # ============================================================================
 # MCP tool routing (different calculator tools)
 # ============================================================================
