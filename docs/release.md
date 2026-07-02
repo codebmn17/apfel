@@ -21,11 +21,15 @@ make release [TYPE=]        run local release workflow
        |
   integration tests
        |
-  commit + tag + push
+  stamp CHANGELOG + commit + tag + push
        |
-  package tarball + publish GitHub Release
+  sign + package tarball + notarize + sha256
+       |
+  publish GitHub Release
        |
   update Homebrew tap formula
+       |
+  open nixpkgs bump PR (non-fatal)
        |
        v
 ./scripts/post-release-verify.sh
@@ -71,11 +75,12 @@ This runs locally via `scripts/publish-release.sh` (not on GitHub Actions - GitH
 3. Builds the release binary
 4. Runs all unit tests via `swift run apfel-tests`
 5. Runs all integration tests discovered under `Tests/integration/` with real Apple Intelligence
-6. Commits `.version`, `README.md`, `Sources/BuildInfo.swift`, tags, and pushes to main
+6. Stamps the `[Unreleased]` CHANGELOG section as the new version (`scripts/stamp-changelog.sh`), then commits `.version`, `README.md`, `Sources/BuildInfo.swift`, and `CHANGELOG.md`, tags, and pushes to main
 7. Signs the binary with the Developer ID identity (hardened runtime) and packages `apfel-<version>-arm64-macos.tar.gz`
 8. Verifies the Developer ID signature and notarizes the binary with Apple (hard gate - the release aborts if signing or notarization fails)
 9. Publishes the GitHub Release with changelog, the tarball, and an `apfel-<version>-arm64-macos.tar.gz.sha256` checksum asset
 10. Updates the Homebrew tap formula (`Arthur-Ficial/homebrew-tap`)
+11. Opens a build-verified nixpkgs bump PR (`scripts/publish-nixpkgs-bump.sh`) as a non-fatal final step - a failure here warns but does not fail the release, since the GitHub Release and tap are already published
 
 Total time: ~5 minutes.
 
@@ -105,7 +110,7 @@ brew upgrade apfel
 
 GitHub CI (`ci.yml`) runs on every push/PR as a safety net, but it is a **subset**:
 - Unit tests that do not need Apple Intelligence
-- Model-free integration checks such as flags, help, version, file handling, man-page drift, and ApfelCore packaging smoke tests
+- Model-free integration checks such as flags, help, version, file handling, man-page drift, the model-free HTTP server suites (CORS/origin/Host/auth/501/OpenAI-shape, servers started in CI), and ApfelCore packaging smoke tests
 
 GitHub CI **cannot** run the full integration suite because GitHub-hosted `macos-26` runners are arm64 VMs without Apple Intelligence. Full qualification runs locally on a Mac with Apple Intelligence via `make preflight` and `make release`. This local run is the real gate - no release ships without it.
 
