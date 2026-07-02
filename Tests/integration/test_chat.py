@@ -289,6 +289,69 @@ def test_chat_non_tty_rejected():
     assert "interactive terminal" in result.stderr.lower() or "tty" in result.stderr.lower()
 
 
+def _run_chat_until_natural_exit(args, first_input, env=None, timeout=120):
+    """Run chat in a PTY, send one line, drain to EOF, and return the REAL exit code.
+
+    run_chat_tty's WNOHANG reap logic falls back to 256 (reported as exit 1)
+    when the process exits quickly, so it cannot verify a specific nonzero exit.
+    This helper blocks on waitpid after EOF to get the true status.
+    Returns (exitcode, output_str).
+    """
+    merged = _clean_env(env)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="This process .* use of forkpty\\(\\) may lead to deadlocks in the child\\.",
+            category=DeprecationWarning,
+        )
+        pid, fd = pty.fork()
+    if pid == 0:
+        os.execve(str(BINARY), [str(BINARY), *args], merged)
+
+    out = bytearray()
+    sent = False
+    deadline = time.time() + timeout
+    while True:
+        if time.time() > deadline:
+            os.kill(pid, signal.SIGKILL)
+            os.waitpid(pid, 0)
+            raise TimeoutError(f"Timed out: {' '.join(args)}")
+        if not sent and b"you" in out:
+            os.write(fd, first_input)
+            sent = True
+        ready, _, _ = select.select([fd], [], [], 0.1)
+        if fd in ready:
+            try:
+                chunk = os.read(fd, 4096)
+            except OSError:
+                chunk = b""
+            if not chunk:
+                break
+            out.extend(chunk)
+    os.close(fd)
+    _, status = os.waitpid(pid, 0)
+    return os.waitstatus_to_exitcode(status), out.decode("utf-8", errors="replace")
+
+
+def test_chat_context_rotation_failure_exits_nonzero():
+    """#252: a context-rotation failure mid-session must exit nonzero.
+
+    Using --context-strategy strict with a near-zero input budget forces
+    truncateTranscript to throw contextOverflow after the first turn. The
+    process must exit 4 (context overflow), not 0 as if the session ended
+    cleanly - a wrapper script otherwise sees success despite the session dying.
+    """
+    require_model()
+    returncode, output = _run_chat_until_natural_exit(
+        ["--chat", "--context-strategy", "strict", "--context-output-reserve", "4090"],
+        first_input=b"hello\n",
+    )
+    assert returncode == 4, (
+        f"expected exit 4 on context-rotation failure, got {returncode}\n{output[-400:]}"
+    )
+    assert "context overflow" in strip_ansi(output).lower()
+
+
 def test_chat_eof_exits_cleanly():
     """Ctrl-D (EOF) must exit chat gracefully."""
     require_model()

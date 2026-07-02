@@ -258,6 +258,12 @@ func chat(systemPrompt: String?, options: SessionOptions = .defaults, mcpManager
         }
     }
 
+    // Set when context rotation fails mid-session (e.g. --context-strategy
+    // strict over budget). Captured here and rethrown after the loop so the
+    // top-level handler maps it to a nonzero exit; a plain `throw` inside the
+    // turn body would be swallowed by the per-turn model-error catch and the
+    // session would exit 0 as if it ended cleanly (#252).
+    var rotationError: Error?
     while true {
         let prompt = quietMode ? "" : "you› "
         guard let input = lineEditor.readLine(prompt: prompt) else { break }
@@ -318,8 +324,11 @@ func chat(systemPrompt: String?, options: SessionOptions = .defaults, mcpManager
                         print(styled("  [context rotated — \(options.contextConfig.strategy.rawValue)]", .dim))
                     }
                 } catch {
-                    let classified = ApfelError.classify(error)
-                    printError("\(classified.cliLabel) \(classified.openAIMessage)")
+                    // Context rotation failed (e.g. --context-strategy strict with
+                    // history over budget throws contextOverflow). Capture it and
+                    // leave the loop; it is rethrown below so main.swift maps it via
+                    // exitCode(for:) to a nonzero exit instead of exiting 0 (#252).
+                    rotationError = error
                     break
                 }
             }
@@ -328,6 +337,8 @@ func chat(systemPrompt: String?, options: SessionOptions = .defaults, mcpManager
             printError("\(classified.cliLabel) \(classified.openAIMessage)")
         }
     }
+
+    if let rotationError { throw rotationError }
 
     if !quietMode {
         let bye = styled("\nGoodbye.", .dim)
