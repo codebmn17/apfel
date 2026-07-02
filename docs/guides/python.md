@@ -245,7 +245,7 @@ Lab script: [`06_example.py`](https://github.com/Arthur-Ficial/apfel-guides-lab/
 
 ## Tested with
 
-- apfel v1.0.3
+- apfel v1.0.3 (original capture; the CLI and HTTP surfaces used here are release-gated by apfel's test suite on every version)
 - macOS 26.3.1, Apple Silicon
 - Python 3.11 / openai 2.31.0
 - Date: 2026-04-16

@@ -3,7 +3,7 @@
 Real findings from systematic experimentation with Apple's on-device FoundationModels LLM
 and apfel's OpenAI-compatible tool calling implementation.
 
-**Tested:** 2026-03-26 | **apfel:** v0.5.0 | **macOS:** 26.3
+**Findings from:** 2026-03-26 (apfel v0.5.0, macOS 26.3) | **Last verified:** 2026-07-02 (apfel v1.7.1, macOS 26.5.2). The documented behaviors are exercised by the MCP integration suites (`Tests/integration/mcp_server_test.py`, `Tests/integration/mcp_remote_test.py`) on every release.
 
 > **Looking for ready-made MCPs?** [apfel-mcp.franzai.com](https://apfel-mcp.franzai.com/) ships three token-budget-optimized MCP servers designed for apfel's 4096-token context window: `url-fetch`, `ddg-search`, and the flagship compound `search-and-fetch` tool. `brew install Arthur-Ficial/tap/apfel-mcp`. The repo is open for contributions of new apfel-optimized MCPs - see [apfel-mcp.franzai.com/#contribute](https://apfel-mcp.franzai.com/#contribute).
 

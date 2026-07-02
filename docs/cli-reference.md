@@ -125,6 +125,9 @@ apfel --serve --debug
 apfel --count-tokens -f README.md "Summarize this"
 apfel --count-tokens -o json "hello" | jq .
 apfel --count-tokens --strict -f large-file.txt "process"
+# Counts use the on-device tokenizer API (macOS 26.4+). When it is unusable
+# (older macOS, or Apple Intelligence off), counts are a chars/4 approximation:
+# a stderr warning names the reason and JSON output carries "approximate": true.
 
 # --stream
 apfel --stream "Write a haiku about code"

@@ -383,7 +383,7 @@ HTTP Server (/v1/*) ───────┘   (100% on-device, zero network)
                                 TokenCounter → real token counts (SDK 26.4)
 ```
 
-Swift 6.3 strict concurrency. Three targets: `ApfelCore` (pure logic, unit-testable, also available as a Swift Package product - see [docs/swift-library.md](docs/swift-library.md)), `apfel` (CLI + server), and `apfel-tests` (pure Swift runner, no XCTest).
+Swift 6.3 strict concurrency. Three targets: `ApfelCore` (pure logic, unit-testable, also available as a Swift Package product - linked under Reference Docs above), `apfel` (CLI + server), and `apfel-tests` (pure Swift runner, no XCTest).
 
 ## Build & Test
 

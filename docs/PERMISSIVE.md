@@ -3,7 +3,7 @@
 Real output from Apple's on-device model showing the effect of `--permissive`
 on guardrail behavior. Every response is unedited.
 
-> apfel v0.9.0 | macOS 26.3.1 | arm64 | 2026-04-07
+> apfel v0.9.0 | macOS 26.3.1 | arm64 | 2026-04-07 (original capture - the outputs below are historical. Guardrail behavior shifts between model releases; the macOS 26.5.2 model refuses more aggressively than the one captured here.)
 
 ## What `--permissive` does
 

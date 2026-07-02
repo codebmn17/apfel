@@ -185,6 +185,14 @@ Accepts the same input flags as a single prompt
 .BR \-\-system ,
 .BR \-\-mcp ,
 etc.).
+Counts use the on-device tokenizer API (macOS 26.4+).
+When that API is unusable (older macOS, or Apple Intelligence unavailable),
+counts fall back to a chars/4 approximation: a warning naming the reason is
+printed to standard error, and JSON output
+.RB ( \-o " json" )
+carries an
+.B approximate
+field set to true.
 .TP
 .B \-\-strict
 With
