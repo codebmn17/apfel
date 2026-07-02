@@ -60,6 +60,10 @@ jobs:
           # a flag, env var, or exit code without updating man/apfel.1.in.
           python3 -m pytest Tests/integration/test_man_page.py -v --tb=short
 
+          # Bundled MCP calculator (model-free, direct JSON-RPC over stdio):
+          # guards #322 - string args are coerced, non-numeric args error.
+          python3 -m pytest Tests/integration/test_calculator_server.py -v --tb=short
+
           # Note: performance_test.py requires Apple Intelligence (benchmark runs inference).
           # It runs locally via make preflight / make release.
 
