@@ -115,7 +115,7 @@ sha256=$(shasum -a 256 "$asset" | awk '{print $1}')
 echo "Asset: $asset"
 echo "SHA256: $sha256"
 
-prev_tag=$(git tag --sort=-v:refname | grep -v "v$version" | head -1)
+prev_tag=$(git tag --sort=-v:refname | grep -Fxv "v$version" | head -1)
 notes="## What's Changed"$'\n\n'
 if [ -n "$prev_tag" ]; then
     notes+=$(git log --oneline "$prev_tag"..HEAD~1 -- | sed 's/^/- /')
