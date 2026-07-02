@@ -133,7 +133,7 @@ if parsed.debug { ApfelDebugConfiguration.isEnabled = true }
 // stays pure; printed here (#254).
 if !quietMode {
     for warning in parsed.warnings {
-        printStderr("\(styled("apfel:", .yellow)) \(warning)")
+        printStderr("\(styledErr("apfel:", .yellow)) \(warning)")
     }
 }
 
@@ -162,7 +162,7 @@ if parsed.mode.acceptsStdinInput && isatty(STDIN_FILENO) == 0 {
         // Empty pipe: hint about stderr redirection. Fires whether or not a
         // prompt was given, so the bare-pipe case (`somecmd | apfel`, no args)
         // still gets the hint now that it flows through this path (#152, #222).
-        printStderr("\(styled("apfel:", .yellow)) piped input was empty - if the command prints to stderr, try: command 2>&1 | apfel")
+        printStderr("\(styledErr("apfel:", .yellow)) piped input was empty - if the command prints to stderr, try: command 2>&1 | apfel")
     }
 }
 

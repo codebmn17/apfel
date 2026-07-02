@@ -360,6 +360,65 @@ def test_no_color_disables_ansi_under_tty():
     assert not ANSI_RE.search(output), output
 
 
+def test_empty_no_color_still_colors_under_tty():
+    """#258: NO_COLOR="" (empty) must NOT disable color."""
+    returncode, output = run_cli_tty(["--help"], env={"NO_COLOR": ""})
+    assert returncode == 0
+    assert ANSI_RE.search(output), output
+
+
+def _run_split_tty(args, env=None, timeout=30):
+    """Run the binary with stdout on a pty (a TTY) but stderr on a plain pipe.
+
+    Reproduces the `apfel ... 2>err.log` case from a terminal: stdout is a
+    terminal, stderr is redirected. Returns (returncode, stderr_bytes).
+    """
+    merged_env = os.environ.copy()
+    for key in ["NO_COLOR", "APFEL_SYSTEM_PROMPT", "APFEL_HOST",
+                "APFEL_PORT", "APFEL_TEMPERATURE", "APFEL_MAX_TOKENS"]:
+        merged_env.pop(key, None)
+    if env:
+        merged_env.update(env)
+
+    stdout_master, stdout_slave = pty.openpty()
+    err_read, err_write = os.pipe()
+    proc = subprocess.Popen(
+        [str(BINARY), *args],
+        stdin=stdout_slave, stdout=stdout_slave, stderr=err_write,
+        env=merged_env, close_fds=True,
+    )
+    os.close(stdout_slave)
+    os.close(err_write)
+    err = bytearray()
+    deadline = time.time() + timeout
+    while True:
+        if time.time() > deadline:
+            proc.kill()
+            raise TimeoutError(f"Timed out waiting for {' '.join(args)}")
+        try:
+            chunk = os.read(err_read, 4096)
+        except OSError:
+            break
+        if not chunk:
+            break
+        err.extend(chunk)
+    os.close(err_read)
+    os.close(stdout_master)
+    proc.wait(timeout=max(1, int(deadline - time.time())))
+    return proc.returncode, bytes(err)
+
+
+def test_redirected_stderr_has_no_ansi_when_stdout_is_tty():
+    """#249: color must key off stderr's TTY-ness, not stdout's.
+
+    With stdout on a terminal and stderr redirected, the error line must
+    contain no ANSI escape bytes.
+    """
+    returncode, err = _run_split_tty(["--definitely-not-a-real-flag"])
+    assert returncode == 2
+    assert b"\x1b" not in err, err
+
+
 def test_quiet_json_prompt_output_is_machine_readable():
     require_model()
     result = run_cli(

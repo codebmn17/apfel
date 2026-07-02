@@ -17,4 +17,14 @@ public enum ColorPolicy {
     public static func noColorFromEnv(_ value: String?) -> Bool {
         value.map { !$0.isEmpty } ?? false
     }
+
+    /// Whether to emit ANSI color codes for a given output destination.
+    ///
+    /// Colorize only when the destination is a TTY and neither `NO_COLOR` nor
+    /// `--no-color` is in effect. Callers pass the isatty() result for the
+    /// specific file descriptor they are writing to: stdout for stdout writes,
+    /// stderr for stderr writes (#249).
+    public static func shouldColorize(isTTY: Bool, noColorEnv: Bool, noColorFlag: Bool) -> Bool {
+        isTTY && !noColorEnv && !noColorFlag
+    }
 }
