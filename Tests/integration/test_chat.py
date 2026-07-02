@@ -1046,3 +1046,58 @@ def test_chat_hint_message_shown():
     clean = strip_ansi(output)
     assert "quit" in clean.lower() and "exit" in clean.lower(), \
         f"Quit hint not shown: {clean[:300]}"
+
+
+# ---------------------------------------------------------------------------
+# Persistent history (APFEL_HISTFILE, #259) - opt-in, off by default
+# ---------------------------------------------------------------------------
+
+def test_chat_history_persists_with_histfile(tmp_path):
+    """With APFEL_HISTFILE set, a typed prompt is written to the file on exit.
+
+    Model-dependent: --chat requires Apple Intelligence to start. The prompt
+    is add_history'd before the model call, and the file is written in the
+    line editor's deinit on clean `quit` exit (a SIGKILL stop_when would skip
+    deinit, so this test lets the process exit naturally).
+    """
+    require_model()
+    histfile = tmp_path / "apfel_history"
+    # Single token: libedit's history file escapes spaces as \040, so a
+    # space-free marker survives verbatim regardless of that encoding.
+    marker = "zebracrossingsentinel"
+    returncode, output = run_chat_tty(
+        ["--chat"],
+        steps=[
+            (b"you", marker.encode() + b"\n"),
+            (None, b"quit\n"),
+        ],
+        env={"APFEL_HISTFILE": str(histfile)},
+        timeout=90,
+    )
+    assert histfile.exists(), f"history file not written; output: {output[:300]!r}"
+    content = histfile.read_text()
+    assert marker in content, f"prompt not persisted; file: {content!r}"
+    # File contains the user's prompts -> must be private (mode 0600).
+    assert (histfile.stat().st_mode & 0o777) == 0o600, oct(histfile.stat().st_mode)
+
+
+def test_chat_history_off_by_default(tmp_path):
+    """Without APFEL_HISTFILE, a pre-seeded file is neither read nor rewritten.
+
+    The default is in-memory-only: apfel must not touch a history file the
+    user did not opt into. We seed a file, run a session with the env var
+    UNSET, and assert the file is byte-for-byte unchanged.
+    """
+    require_model()
+    histfile = tmp_path / "untouched_history"
+    histfile.write_text("preexisting line\n")
+    before = histfile.read_bytes()
+    returncode, output = run_chat_tty(
+        ["--chat"],
+        steps=[
+            (b"you", b"should not be saved\n"),
+            (None, b"quit\n"),
+        ],
+        timeout=90,
+    )
+    assert histfile.read_bytes() == before, "history file modified despite opt-out"

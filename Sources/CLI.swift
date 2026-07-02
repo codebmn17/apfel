@@ -237,7 +237,13 @@ func chat(systemPrompt: String?, options: SessionOptions = .defaults, mcpManager
         session = makeSession(systemPrompt: systemPrompt, options: options)
     }
     let genOpts = makeGenerationOptions(options)
-    let lineEditor = ChatLineEditor(outputFormat: outputFormat)
+    // Persistent history is opt-in via APFEL_HISTFILE (off by default). The
+    // path decision is a pure, unit-tested policy in ApfelCLI (#259).
+    let historyFile = ChatHistory.filePath(env: ProcessInfo.processInfo.environment)
+    let lineEditor = ChatLineEditor(
+        outputFormat: outputFormat,
+        historyLimit: ChatHistory.maxEntries,
+        historyFile: historyFile)
     var turn = 0
 
     printHeader()
@@ -700,6 +706,7 @@ func printUsage(to handle: FileHandle = .standardOutput) {
       APFEL_CONTEXT_OUTPUT_RESERVE
                                 Tokens reserved for output
       APFEL_DEBUG               Enable debug logging (same as --debug)
+      APFEL_HISTFILE            Persist --chat history to this file (off by default)
       NO_COLOR                  Disable colored output (https://no-color.org)
 
     \(styled("EXIT CODES:", .yellow, .bold))

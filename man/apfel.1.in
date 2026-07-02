@@ -342,6 +342,17 @@ Tokens reserved for the model's output. Default
 When set to any non-empty value, enables debug logging (same as
 .BR \-\-debug ).
 .TP
+.B APFEL_HISTFILE
+Persist interactive
+.B \-\-chat
+line-editing history to this file across sessions. Off by default: when
+unset (or empty), chat history is kept in memory only and nothing is
+written to disk. When set, prior history is loaded at startup and the file
+is rewritten (bounded to the most recent 500 entries, mode 0600) on exit.
+A leading
+.B ~
+is expanded to the home directory.
+.TP
 .B NO_COLOR
 When set to any non-empty value, disables ANSI color output. See
 .UR https://no-color.org

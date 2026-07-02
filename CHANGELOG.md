@@ -7,6 +7,10 @@ and this project adheres to [https://semver.org/](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in persistent `--chat` history via the `APFEL_HISTFILE` environment variable. Off by default (the honest, secure default): when unset, chat line-editing history stays in memory only and nothing is written to disk. When set to a path, prior history is loaded at startup (up-arrow reaches earlier sessions) and the file is rewritten on exit, bounded to the most recent 500 entries and chmod 0600 (it contains your prompts). A leading `~` is expanded. macOS libedit exposes `read_history`/`write_history`/`history_truncate_file` but not GNU readline's `append_history`, so the merged in-memory list is written and then truncated to stay bounded. The opt-in path decision is a pure, unit-tested `ChatHistory.filePath(env:)` in ApfelCLI; persistence is verified end-to-end via a PTY test (#259).
+
 ### Changed
 
 - JSON output now ends with a single trailing newline. `apfel -o json ...`, `apfel --count-tokens -o json ...`, and `apfel --benchmark -o json` previously printed the final JSON object with no terminating newline (last byte `}`), which made `while read` loops and `wc -l` awkward. This reverses the earlier GH-9 no-trailing-newline behavior; JSONL chat lines already ended with a newline and are unchanged (no double newline). Covered by a model-free cli_e2e test on `--count-tokens -o json` and an updated single-prompt JSON test (#259).
