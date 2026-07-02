@@ -237,8 +237,21 @@ extension CLIArguments {
         // works as a normal prompt because it is not the literal first arg here.
         if args.first == "demos" {
             result.mode = .demos
-            if args.count > 1, !args[1].hasPrefix("-") {
-                result.demosTarget = args[1]
+            // Scan the tokens after `demos`: a `-h`/`--help` shows help (never
+            // writes files), the first non-dash token is the target dir, and any
+            // other dash token is a real error instead of being silently
+            // discarded (#248).
+            for token in args.dropFirst() {
+                if token == "-h" || token == "--help" {
+                    result.mode = .help
+                    return result
+                }
+                if token.hasPrefix("-") {
+                    throw CLIErrors.unknownOption(token)
+                }
+                if result.demosTarget == nil {
+                    result.demosTarget = token
+                }
             }
             return result
         }

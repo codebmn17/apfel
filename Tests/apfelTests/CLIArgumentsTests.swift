@@ -172,6 +172,45 @@ func runCLIArgumentsTests() {
         try assertEqual(args.prompt, "tag")
     }
 
+    test("demos --help shows help instead of writing files (#248)") {
+        let args = try CLIArguments.parse(["demos", "--help"])
+        try assertEqual(args.mode, .help)
+    }
+
+    test("demos -h shows help instead of writing files (#248)") {
+        let args = try CLIArguments.parse(["demos", "-h"])
+        try assertEqual(args.mode, .help)
+    }
+
+    test("demos with an unknown dash token throws unknownOption (#248)") {
+        do {
+            _ = try CLIArguments.parse(["demos", "-q"])
+            throw TestFailure("expected CLIParseError for demos -q")
+        } catch let e as CLIParseError {
+            try assertTrue(e.message.contains("unknown option"))
+            try assertTrue(e.message.contains("-q"))
+        }
+    }
+
+    test("demos with --output after it throws unknownOption (#248)") {
+        do {
+            _ = try CLIArguments.parse(["demos", "--output", "json"])
+            throw TestFailure("expected CLIParseError for demos --output json")
+        } catch let e as CLIParseError {
+            try assertTrue(e.message.contains("unknown option"))
+            try assertTrue(e.message.contains("--output"))
+        }
+    }
+
+    test("demos <dir> before a dash token still throws (#248)") {
+        do {
+            _ = try CLIArguments.parse(["demos", "./out", "-q"])
+            throw TestFailure("expected CLIParseError for demos ./out -q")
+        } catch let e as CLIParseError {
+            try assertTrue(e.message.contains("unknown option"))
+        }
+    }
+
     // ========================================================================
     // MARK: - acceptsStdinInput (GH-82)
     // ========================================================================
