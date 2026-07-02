@@ -219,6 +219,37 @@ func runToolCallHandlerTests() {
         try assertEqual(result!.first?.argumentsString, "{}")
     }
 
+    // MARK: - Synthesized id for calls missing "id" (#244)
+
+    test("synthesizes an id when the tool call omits \"id\" (#244)") {
+        // The on-device model routinely drops the id field. The whole call used
+        // to be treated as plain text and leaked to the user verbatim.
+        let response = #"{"tool_calls": [{"type": "function", "function": {"name": "get_weather", "arguments": "{\"city\":\"Vienna\"}"}}]}"#
+        let result = ToolCallHandler.detectToolCall(in: response)
+        try assertNotNil(result)
+        try assertEqual(result!.count, 1)
+        try assertEqual(result!.first?.name, "get_weather")
+        try assertTrue(result!.first!.id.hasPrefix("call_"), "synthesized id must start with call_, got \(result!.first!.id)")
+        try assertTrue(result!.first!.id.count > 5, "synthesized id must carry a suffix")
+    }
+
+    test("synthesizes an id when \"id\" is an empty string (#244)") {
+        let response = #"{"tool_calls": [{"id": "", "type": "function", "function": {"name": "fn", "arguments": "{}"}}]}"#
+        let result = ToolCallHandler.detectToolCall(in: response)
+        try assertNotNil(result)
+        try assertTrue(result!.first!.id.hasPrefix("call_"), "empty id must be replaced, got \(result!.first!.id)")
+    }
+
+    test("preserves a provided id and only synthesizes for the missing one (#244)") {
+        let response = #"{"tool_calls": [{"id": "call_keep", "type": "function", "function": {"name": "a", "arguments": "{}"}}, {"type": "function", "function": {"name": "b", "arguments": "{}"}}]}"#
+        let result = ToolCallHandler.detectToolCall(in: response)
+        try assertNotNil(result)
+        try assertEqual(result!.count, 2)
+        try assertEqual(result![0].id, "call_keep")
+        try assertTrue(result![1].id.hasPrefix("call_"), "second id must be synthesized")
+        try assertTrue(result![1].id != "call_keep", "synthesized id must be distinct")
+    }
+
     // MARK: - ensureJSONArguments (TICKET-013 fix)
 
     test("ensureJSONArguments passes through valid JSON object") {

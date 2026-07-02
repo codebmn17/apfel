@@ -231,7 +231,11 @@ public enum ToolCallHandler {
 
         var result: [ParsedToolCall] = []
         for call in rawCalls {
-            guard let id = call["id"] as? String else { continue }
+            // The on-device model routinely omits (or blanks) the id. Synthesize
+            // one instead of dropping the call, which used to leak the raw
+            // {"tool_calls":...} JSON to the user as plain text (#244).
+            let providedId = (call["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let id = (providedId?.isEmpty == false) ? providedId! : "call_\(UUID().uuidString.prefix(8))"
 
             let name: String
             let rawArguments: Any?
