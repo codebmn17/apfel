@@ -729,19 +729,41 @@ def test_mcp_multiply_returns_correct_result(multiply_247x83_response):
     assert "20501" in content or "20,501" in content, f"Expected 20501, got: {content}"
 
 
+def _is_guardrail_refusal(text):
+    """The on-device model's guardrail refusals ("I'm sorry, but I cannot
+    respond ... violates our guidelines" / "... cannot provide an answer that
+    promotes or supports harm"). Incidental model behavior, not a property
+    any test here asserts on."""
+    lowered = text.lower()
+    return lowered.startswith("i'm sorry") and "cannot" in lowered
+
+
 def test_mcp_sqrt_returns_correct_result():
-    """Sqrt tool: sqrt(144) = 12."""
-    resp = httpx.post(f"{API_URL}/chat/completions", json={
-        "model": MODEL,
-        "messages": [
-            {"role": "user", "content": "Use the sqrt tool to compute the square root of 144. Reply with just the number."}
-        ],
-        "seed": 42,
-    }, timeout=TIMEOUT)
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"] or ""
-    assert data["choices"][0]["finish_reason"] == "stop"
-    assert_no_raw_tool_calls(content)
+    """Sqrt tool: sqrt(144) = 12.
+
+    The macOS 26.5.2 model guardrail-refuses this prompt on some sampling
+    trajectories (seed 42 became a deterministic refusal; unseeded runs
+    refuse intermittently). The property under test is that the tool result
+    round-trips into the final answer, not that a particular seed avoids the
+    guardrail, so rotate seeds on refusal and assert on the first real
+    answer (#320)."""
+    content = ""
+    for seed in (42, 7, 123):
+        resp = httpx.post(f"{API_URL}/chat/completions", json={
+            "model": MODEL,
+            "messages": [
+                {"role": "user", "content": "Use the sqrt tool to compute the square root of 144. Reply with just the number."}
+            ],
+            "seed": seed,
+        }, timeout=TIMEOUT)
+        data = resp.json()
+        content = data["choices"][0]["message"]["content"] or ""
+        assert data["choices"][0]["finish_reason"] == "stop"
+        assert_no_raw_tool_calls(content)
+        if not _is_guardrail_refusal(content):
+            break
+    else:
+        pytest.fail(f"model guardrail-refused every seed; last: {content}")
     assert "12" in content, f"Expected 12, got: {content}"
 
 
