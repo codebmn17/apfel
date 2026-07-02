@@ -36,6 +36,15 @@ func exitCode(for error: ApfelError) -> Int32 {
     ApfelExitCodes.code(for: error)
 }
 
+// MARK: - Locale
+
+// Adopt the user's LC_CTYPE from the environment (LANG/LC_*). apfel otherwise
+// runs in the "C" locale, and libedit's multibyte handling (mbrtowc/ct_encode)
+// keys off LC_CTYPE - without this, chat line editing of non-ASCII input
+// (backspace/arrow over "ü"/emoji) operates byte-wise and corrupts the line.
+// Must run before any ChatLineEditor is constructed (#256).
+setlocale(LC_CTYPE, "")
+
 // MARK: - Signal Handling
 
 apfel_install_sigint_exit_handler(isatty(STDOUT_FILENO) != 0 ? 1 : 0)

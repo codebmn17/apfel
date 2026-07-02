@@ -333,6 +333,66 @@ def _run_chat_until_natural_exit(args, first_input, env=None, timeout=120):
     return os.waitstatus_to_exitcode(status), out.decode("utf-8", errors="replace")
 
 
+def test_chat_multibyte_backspace_is_character_wise():
+    """#256: with setlocale(LC_CTYPE,"") libedit edits non-ASCII by character.
+
+    Type "cafe-acute" (the 'e' is U+00E9, 2 UTF-8 bytes) then one backspace then
+    'X'. Locale-aware libedit deletes the whole 2-byte character with a single
+    backspace/erase, so the erased region leaves no dangling UTF-8 lead byte. In
+    the "C" locale the backspace would delete a single byte and leave a stray
+    0xC3, corrupting the line.
+    """
+    require_model()
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="This process .* use of forkpty\\(\\) may lead to deadlocks in the child\\.",
+            category=DeprecationWarning,
+        )
+        pid, fd = pty.fork()
+    if pid == 0:
+        env = _clean_env({"LANG": "en_US.UTF-8", "LC_CTYPE": "en_US.UTF-8"})
+        os.execve(str(BINARY), [str(BINARY), "--chat"], env)
+    tty = bytearray()
+    deadline = time.time() + 90
+    while time.time() < deadline and b"you" not in tty:
+        ready, _, _ = select.select([fd], [], [], 0.2)
+        if fd in ready:
+            try:
+                tty.extend(os.read(fd, 4096))
+            except OSError:
+                break
+    assert b"you" in tty, "chat prompt never appeared"
+    time.sleep(0.3)
+    os.write(fd, b"caf\xc3\xa9\x7fX")  # café, backspace, X (no Enter)
+    time.sleep(0.6)
+    echo = bytearray()
+    ready, _, _ = select.select([fd], [], [], 0.5)
+    while fd in ready:
+        try:
+            chunk = os.read(fd, 4096)
+        except OSError:
+            break
+        if not chunk:
+            break
+        echo.extend(chunk)
+        ready, _, _ = select.select([fd], [], [], 0.3)
+    os.kill(pid, signal.SIGKILL)
+    os.waitpid(pid, 0)
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+    echo = bytes(echo)
+    # The 2-byte character was echoed once when typed.
+    assert b"\xc3\xa9" in echo, f"multibyte char not echoed: {echo!r}"
+    # A single backspace deleted the whole character (character-wise, not byte-wise).
+    assert echo.count(b"\x08") == 1, f"expected one backspace erase, got: {echo!r}"
+    # No dangling UTF-8 lead byte after the erase (the byte-wise-deletion signature).
+    after_erase = echo.rsplit(b"\x08", 1)[1]
+    assert b"\xc3" not in after_erase, f"dangling lead byte after erase: {echo!r}"
+
+
 def test_chat_ctrl_c_exits_130():
     """#251: Ctrl-C at the chat prompt exits 130 (interrupted).
 
