@@ -1,27 +1,27 @@
 """
-apfel Integration Tests — TDD RED batch (branch tdd/red-tests-167-183)
+apfel Integration Tests — regression guards for tickets #167-#183 and #219/#243
 
-DELIBERATELY FAILING tests, one per ticket that cannot be reached from the
-pure-Swift unit target (see Package.swift: apfel-tests depends only on
-ApfelCore + ApfelCLI, so executable-target bugs and server/CLI features are
-red-tested here at the wire/CLI boundary).
+These began life as the TDD RED batch (branch tdd/red-tests-167-183). Every
+ticket they cover is now FIXED and shipped; the tests are kept as REGRESSION
+GUARDS so the behaviour cannot silently regress. They live here (not in the
+pure-Swift unit target) because they exercise the wire/CLI boundary of the
+FoundationModels-coupled executable target, which apfel-tests cannot import
+(see Package.swift: apfel-tests depends only on ApfelCore + ApfelCLI).
 
-These assert the CORRECT behaviour described in each GitHub issue. The fix that
-makes them green is a SEPARATE follow-up task — do not implement here.
+Two kinds of guard:
+  - Wire-level behaviour guards (real requests): #167 json_schema, #169 prewarm
+    (model-free), #171 streamed structured output, #176 tool-def token count,
+    #219 union schemas, #243 fractional number output.
+  - Source-level seam pins: where the failure condition is not externally
+    triggerable from a client (a mid-stream refusal / retry, an unbounded
+    summary), the deterministic coverage lives next to the code and is exercised
+    by the pure-Swift unit suite; the guard here pins the source seam so the
+    wiring cannot be removed. Covers #168, #175, #179, #182.
 
-Covered (real assertions, red now):
-  #167 json_schema, #169 prewarm (model-free),
-  #171 streamed structured output, #176 tool-def token undercount
-
-Covered (Tier-3 loud placeholders — failure condition not externally
-observable/triggerable, so a deterministic test needs a fix-phase testability
-seam in the executable target; these pytest.fail rather than risk a false green):
-  #168 top_p/greedy mapping, #175 summarize budget, #179 refusal accounting,
-  #182 streaming-retry stdout
-
-Model-dependent tests are FAILING, not skipped — consistent with the project's
-"never skip" rule. They run under local `make test` where Apple Intelligence is
-present. #169 is model-free and runs anywhere.
+Model-dependent tests FAIL rather than skip when the model is absent, consistent
+with the project's "never skip" rule. They run under local `make test` /
+`make release` where Apple Intelligence is present. #169 and the source-seam
+pins are model-free and run anywhere.
 
 Run: python3 -m pytest Tests/integration/test_tdd_red.py -v
 """
@@ -224,27 +224,33 @@ def test_176_tool_definitions_count_toward_prompt_tokens():
 # ---------------------------------------------------------------------------
 
 def test_175_summarize_keeps_prompt_within_budget():
-    """#175: the summarize strategy must verify the final assembly fits the
-    budget (unbounded summary + no final check can overflow).
+    """#175: the summarize strategy must bound the summary AND verify the final
+    assembly fits the budget (an unbounded summary + no final check can overflow).
 
-    Verified NOT reliably triggerable at the wire boundary: whether the model
-    emits a summary long enough to overflow the precise (budget - output
-    reserve) window is non-deterministic, so a coarse prompt_tokens assertion is
-    a false green. trimWithSummary lives in the executable target, which the
-    pure-Swift apfel-tests target cannot import — so the deterministic test
-    cannot run there either.
-
-    FIXED (#175): generateSummary now passes a computed maximumResponseTokens
-    (budget/4) so the summary cannot grow unbounded, and trimWithSummary verifies
-    the assembled [summary]+recent transcript against the budget via
-    fitsTranscriptBudget, falling back to trimNewestFirst when it does not fit.
-    The testing seam — an injectable `summarize` closure on trimWithSummary
-    (default = the real generateSummary) — is in place so a stubbed huge summary
-    proves the budget check; that assertion lives next to the code in the
-    executable target. This wire-level placeholder stays GREEN; it can never
-    deterministically reach the overflow path.
+    Not reliably triggerable at the wire boundary: whether the model emits a
+    summary long enough to overflow the precise (budget - output reserve) window
+    is non-deterministic, so a coarse prompt_tokens assertion would be a false
+    green. The deterministic coverage lives next to the code (trimWithSummary
+    takes an injectable `summarize` closure so a stubbed huge summary proves the
+    budget check). This guard pins the source seam so the two-part fix cannot be
+    silently removed, mirroring the test_179 source-seam approach.
     """
-    pass
+    summarizer = (ROOT / "Sources" / "Summarizer.swift").read_text()
+    # Part 1: the summary is bounded so it cannot grow unbounded.
+    assert "GenerationOptions(maximumResponseTokens: maxTokens)" in summarizer, (
+        "generateSummary must bound the summary length via maximumResponseTokens (#175)")
+    assert "budget / summaryBudgetFraction" in summarizer, (
+        "the summary token cap must be a fraction of the budget (#175)")
+    # Part 2: the assembled [summary]+recent transcript is re-checked against the
+    # budget, with a newest-first fallback when it still does not fit.
+    assert "guard await fitsTranscriptBudget(" in summarizer, (
+        "trimWithSummary must verify the assembled transcript fits the budget (#175)")
+    assert "return await trimNewestFirst(" in summarizer, (
+        "trimWithSummary must fall back to newest-first when the summary overflows (#175)")
+    # The injectable seam that makes the budget check unit-testable must exist.
+    assert "summarize: Summarizer =" in summarizer, (
+        "trimWithSummary must expose an injectable `summarize` closure so a stubbed "
+        "huge summary can prove the budget check without the live model (#175)")
 
 
 # ---------------------------------------------------------------------------
