@@ -42,6 +42,52 @@ func runToolCallHandlerTests() {
         try assertNil(ToolCallHandler.detectToolCall(in: "{}"))
         try assertNil(ToolCallHandler.detectToolCall(in: "{\"tool_calls\": []}"))
     }
+
+    // MARK: - Unparseable tool-call salvage (#358)
+
+    test("salvages function name from unparseable tool-call JSON") {
+        // Live model output (macOS 26.5.2, seed 7): a literal
+        // <escaped_json_string> placeholder with unescaped nested quotes -
+        // invalid JSON that no candidate or bracket repair can parse. Without
+        // salvage this leaked verbatim to the client as message.content.
+        let response = #"{"tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "add", "arguments": {"<escaped_json_string>": "{"name": "100", "arguments": {"<escaped_json_string>": "200"}}}}}}"#
+        let result = ToolCallHandler.detectToolCall(in: response)
+        try assertNotNil(result)
+        try assertEqual(result!.count, 1)
+        try assertEqual(result!.first?.name, "add")
+        // The salvaged arguments must NOT silently become valid JSON (like
+        // "{}") - the invalid-arguments recovery path (#241) must fire so the
+        // model sees a tool error, not a defaults execution.
+        let args = result!.first!.argumentsString
+        let parsed = try? JSONSerialization.jsonObject(with: Data(args.utf8))
+        try assertNil(parsed)
+    }
+    test("salvage does not fire on plain text mentioning tool_calls") {
+        try assertNil(ToolCallHandler.detectToolCall(in: "The tool_calls format uses JSON with a name field."))
+    }
+    test("salvage synthesizes an id and survives a preamble") {
+        let response = #"Let me add those. {"tool_calls": [{"function": {"name": "add", "arguments": {"x": "{"broken"}}]"#
+        let result = ToolCallHandler.detectToolCall(in: response)
+        try assertNotNil(result)
+        try assertEqual(result!.first?.name, "add")
+        try assertTrue(result!.first!.id.hasPrefix("call_"))
+    }
+
+    // MARK: - stripToolCallJSON (#358)
+
+    test("stripToolCallJSON removes a balanced tool-call block") {
+        let text = #"Answer.{"tool_calls": [{"id": "x"}]} trailing"#
+        try assertEqual(ToolCallHandler.stripToolCallJSON(from: text), "Answer. trailing")
+    }
+    test("stripToolCallJSON strips an unbalanced tool-call attempt to end") {
+        // Unescaped quotes desync the brace scan - previously this returned
+        // the text unchanged, leaking the raw protocol JSON to the user.
+        let garbage = #"Sure! {"tool_calls": [{"id": "x", "function": {"name": "add", "arguments": {"a": "1"#
+        try assertEqual(ToolCallHandler.stripToolCallJSON(from: garbage), "Sure!")
+    }
+    test("stripToolCallJSON leaves text without a tool-call marker unchanged") {
+        try assertEqual(ToolCallHandler.stripToolCallJSON(from: "  plain answer  "), "plain answer")
+    }
     test("parses arguments JSON string correctly") {
         let response = #"{"tool_calls": [{"id": "c3", "type": "function", "function": {"name": "fn", "arguments": "{\"key\":\"val\"}"}}]}"#
         let result = ToolCallHandler.detectToolCall(in: response)
