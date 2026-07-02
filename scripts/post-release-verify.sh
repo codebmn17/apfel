@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Post-release verification for apfel.
-# Run after the Publish Release workflow completes.
+# Run after `make release` (scripts/publish-release.sh) completes.
 # Usage: ./scripts/post-release-verify.sh [expected-version]
 set -euo pipefail
 

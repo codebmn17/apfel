@@ -98,7 +98,7 @@ brew upgrade apfel
 - Homebrew's autobump bot picks up new GitHub Releases automatically
 - Emergency formula update: `brew bump-formula-pr apfel --url=<tarball-url> --sha256=<hash>`
 
-The release workflow also updates the custom tap (`Arthur-Ficial/homebrew-tap`) as a secondary channel for apfel-family tools. The `HOMEBREW_TAP_PUSH_TOKEN` secret is required for tap updates.
+`make release` also updates the custom tap (`Arthur-Ficial/homebrew-tap`) as a secondary channel for apfel-family tools, pushing the new formula directly with the active `gh` CLI session (no CI secret involved - releases run locally, not on GitHub Actions).
 
 ## GitHub CI vs local testing
 

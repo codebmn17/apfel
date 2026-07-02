@@ -349,7 +349,7 @@ apfel ships through three channels. All pull the same signed tarball from each G
 ### Post-release checklist
 
 - [ ] `make preflight` passed before release
-- [ ] Publish Release workflow completed green
+- [ ] `make release` (scripts/publish-release.sh) completed green
 - [ ] `./scripts/post-release-verify.sh` passed
 - [ ] CLAUDE.md version and test counts updated (if changed)
 - [ ] File a ticket on `Arthur-Ficial/apfel-web` if the landing page needs update
