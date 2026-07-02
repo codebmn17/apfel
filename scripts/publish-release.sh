@@ -152,7 +152,14 @@ step "Commit and tag v$version"
 # stays current with every release (#201). Idempotent.
 bash scripts/stamp-changelog.sh "$version"
 
-git add .version README.md Sources/BuildInfo.swift CHANGELOG.md
+# Re-stamp the docs/EXAMPLES.md header with the version being released (#332).
+# The doc is regenerated from the *installed* binary before the bump, so its
+# stamp is otherwise permanently one version behind the tag that ships it.
+# Outputs are unaffected by a version bump, so only the header line changes;
+# the macOS/chip/date parts of the stamp are preserved. Idempotent.
+sed -i '' -E "1,10s/^> apfel v[0-9]+\.[0-9]+\.[0-9]+ \|/> apfel v$version |/" docs/EXAMPLES.md
+
+git add .version README.md Sources/BuildInfo.swift CHANGELOG.md docs/EXAMPLES.md
 git commit -m "release v$version"
 git tag -a "v$version" -m "v$version"
 git push origin HEAD:main
